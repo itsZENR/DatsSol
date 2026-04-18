@@ -268,7 +268,20 @@ def _resolve_beaver_damage(s: EngineState) -> None:
     # Regeneration
     for b in s.beavers.values():
         b.hp = min(s.config.beaver_max_hp, b.hp + s.config.beaver_regen)
-def _resolve_degradation(s: EngineState) -> None: ...
+def _resolve_degradation(s: EngineState) -> None:
+    ds = s.effective_ds()
+    # Isolated plantations lose HP
+    for pid, p in s.plantations.items():
+        if pid == s.hq_id:
+            continue
+        if p.immunity_until_turn > s.turn_no:
+            continue  # Skip immune plantations
+        if pid not in s.connected_ids and pid not in s.enemy_ids:
+            p.hp -= ds
+    # Constructions without progress this turn
+    for pos, c in list(s.constructions.items()):
+        if c.last_progress_turn < s.turn_no:
+            c.progress = max(0, c.progress - ds)
 def _resolve_meteo(s: EngineState) -> None: ...
 def _resolve_terraform_and_score(s: EngineState) -> None: ...
 def _resolve_respawn(s: EngineState) -> None: ...

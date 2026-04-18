@@ -81,7 +81,63 @@ def _resolve_repair(s: EngineState, cmds: CommandSet) -> None:
         relay_id = pos_to_id[cmd.relay]
         heal = apply_relay_penalty(rs, relay_id, usage)
         target.hp = min(mhp, target.hp + heal)
-def _resolve_build(s: EngineState, cmds: CommandSet) -> None: ...
+
+
+def _resolve_build(s: EngineState, cmds: CommandSet) -> None:
+    from simulator.engine.validation import is_valid_command
+    from simulator.engine.effects import RelayUsage, apply_relay_penalty
+    from simulator.engine.entities import Construction, Plantation
+    from simulator.engine.events import ConstructionCompleted
+
+    pos_to_id = {p.position: pid for pid, p in s.plantations.items()}
+    usage = RelayUsage()
+    cs_base = s.config.cs
+
+    for cmd in cmds.commands:
+        if not is_valid_command(s, cmd):
+            continue
+        target = cmd.target
+        # Disallow build on: mountain, own plantation, beaver, off-map
+        if target in s.mountains:
+            continue
+        if target in pos_to_id:
+            continue
+        if not (0 <= target[0] < s.config.map_width and 0 <= target[1] < s.config.map_height):
+            continue
+        if any(b.position == target for b in s.beavers.values()):
+            continue
+        relay_id = pos_to_id.get(cmd.relay)
+        if relay_id is None:
+            continue
+        cs_eff = apply_relay_penalty(cs_base, relay_id, usage)
+        if target not in s.constructions:
+            s.constructions[target] = Construction(
+                position=target, progress=0,
+                last_progress_turn=s.turn_no,
+                contributors_last_turn={},
+            )
+        con = s.constructions[target]
+        con.progress += cs_eff
+        con.last_progress_turn = s.turn_no
+        author_id = pos_to_id.get(cmd.author, "?")
+        con.contributors_last_turn[author_id] = (
+            con.contributors_last_turn.get(author_id, 0) + cs_eff
+        )
+
+    # Finish constructions that reached 50
+    done_positions = [pos for pos, c in s.constructions.items() if c.progress >= 50]
+    for pos in done_positions:
+        del s.constructions[pos]
+        new_id = s.new_plant_id()
+        s.plantations[new_id] = Plantation(
+            id=new_id, position=pos, is_main=False,
+            hp=s.effective_mhp(),
+            immunity_until_turn=s.turn_no + s.config.immunity_turns + 1,
+            built_on_turn=s.turn_no,
+        )
+        s.events_this_turn.append(
+            ConstructionCompleted(position=pos, new_plantation_id=new_id)
+        )
 def _resolve_sabotage(s: EngineState, cmds: CommandSet) -> None: ...
 def _resolve_beaver_attack(s: EngineState, cmds: CommandSet) -> None: ...
 def _resolve_relocate(s: EngineState, cmds: CommandSet) -> None: ...

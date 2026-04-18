@@ -108,6 +108,11 @@ def _resolve_build(s: EngineState, cmds: CommandSet) -> None:
             continue
         if any(b.position == target for b in s.beavers.values()):
             continue
+        # Cannot build on an already-terraformed cell (progress == 100).
+        # Once it degrades back below 100 (completed_on_turn cleared), building is allowed again.
+        target_cell = s.cells.get(target)
+        if target_cell is not None and target_cell.progress >= 100:
+            continue
         relay_id = pos_to_id.get(cmd.relay)
         if relay_id is None:
             continue

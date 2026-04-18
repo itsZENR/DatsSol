@@ -28,7 +28,8 @@ def test_sabotage_kill_awards_cell_reward():
     cmd = Command(author=(5, 5), relay=(5, 5), target=(5, 6))
     s2 = tick(s, CommandSet(commands=[cmd]))
     assert "e1" not in s2.plantations
-    assert s2.score == cfg.normal_cell_reward
+    # HQ at (5,5) terraforms for 10 * ts = 50
+    assert s2.score == cfg.normal_cell_reward + 10 * cfg.ts
 
 
 def test_sabotage_boosted_cell_reward():
@@ -37,7 +38,9 @@ def test_sabotage_boosted_cell_reward():
     s.plantations["e1"].position = (7, 7)
     cmd = Command(author=(6, 7), relay=(6, 7), target=(7, 7))
     s2 = tick(s, CommandSet(commands=[cmd]))
-    assert s2.score == cfg.boosted_cell_reward
+    # Enemy at (7,7) boosted → 1500 reward
+    # HQ at (6,7) is not boosted (6%7!=0), so terraforms for 10 * ts = 50
+    assert s2.score == cfg.boosted_cell_reward + 10 * cfg.ts
 
 
 def test_cannot_sabotage_immune_enemy():

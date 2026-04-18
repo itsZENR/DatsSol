@@ -322,7 +322,61 @@ def _resolve_meteo(s: EngineState) -> None:
             storm.position = (nx, ny)
             surviving.append(storm)
     s.storms = surviving
-def _resolve_terraform_and_score(s: EngineState) -> None: ...
+def _resolve_terraform_and_score(s: EngineState) -> None:
+    from simulator.engine.events import Scored, CellTerraformed
+    from simulator.engine.entities import CellState
+
+    ts = s.config.ts
+    completed: list = []
+
+    for pid, p in list(s.plantations.items()):
+        if pid in s.enemy_ids:
+            continue
+        pos = p.position
+        cell = s.cells.get(pos)
+        if cell is None:
+            cell = CellState(progress=0, completed_on_turn=None)
+            s.cells[pos] = cell
+        if cell.progress >= 100:
+            continue
+        delta = min(ts, 100 - cell.progress)
+        cell.progress += delta
+        # Score only if connected to HQ
+        if pid in s.connected_ids:
+            per_pct = (
+                s.config.boosted_cell_reward // 100
+                if s.is_boosted_cell(pos)
+                else s.config.normal_cell_reward // 100
+            )
+            reward = per_pct * delta
+            s.score += reward
+            s.events_this_turn.append(Scored(amount=reward, source="terraform"))
+        if cell.progress >= 100:
+            cell.completed_on_turn = s.turn_no
+            completed.append(pid)
+            s.events_this_turn.append(
+                CellTerraformed(position=pos, reward=s.cell_reward(pos))
+            )
+
+    # Plantations on 100% cells disappear
+    for pid in completed:
+        s.plantations.pop(pid, None)
+
+    # Degrade completed cells after delay
+    for pos, cell in list(s.cells.items()):
+        if cell.completed_on_turn is None:
+            continue
+        # If a plantation currently sits on this cell, don't degrade
+        if pos in {p.position for p in s.plantations.values()}:
+            continue
+        age = s.turn_no - cell.completed_on_turn
+        if age >= s.config.cell_degradation_delay:
+            cell.progress = max(0, cell.progress - s.config.cell_degradation_per_turn)
+            if cell.progress == 0:
+                del s.cells[pos]
+                continue
+            if cell.progress < 100:
+                cell.completed_on_turn = None
 def _resolve_respawn(s: EngineState) -> None: ...
 def _spawn_new_meteo(s: EngineState) -> None: ...
 def _cleanup_dead(s: EngineState) -> None: ...

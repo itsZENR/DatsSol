@@ -29,7 +29,8 @@ def test_beaver_kill_awards_20x():
     s2 = tick(s, CommandSet(commands=[cmd]))
     assert "b1" not in s2.beavers
     # (5,6) not boosted → normal_cell_reward * 20
-    assert s2.score == cfg.normal_cell_reward * cfg.beaver_kill_multiplier
+    # HQ at (5,5) also terraforms for 10 * ts = 50
+    assert s2.score == cfg.normal_cell_reward * cfg.beaver_kill_multiplier + 10 * cfg.ts
 
 
 def test_beaver_kill_on_boosted_cell():
@@ -38,4 +39,6 @@ def test_beaver_kill_on_boosted_cell():
     s.plantations["hq"].position = (7, 6)
     cmd = Command(author=(7, 6), relay=(7, 6), target=(7, 7))
     s2 = tick(s, CommandSet(commands=[cmd]))
-    assert s2.score == cfg.boosted_cell_reward * cfg.beaver_kill_multiplier
+    # (7,7) boosted → boosted_cell_reward * 20
+    # HQ at (7,6) is not boosted (7%7==0, 6%7!=0), so terraforms for 10 * ts = 50
+    assert s2.score == cfg.boosted_cell_reward * cfg.beaver_kill_multiplier + 10 * cfg.ts

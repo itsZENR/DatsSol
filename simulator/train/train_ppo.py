@@ -1,9 +1,10 @@
-"""PPO training on DatssolEnv with curriculum."""
+"""PPO training on DatssolEnv with curriculum (MaskablePPO + flattened Dict actions)."""
 import argparse
 from pathlib import Path
-from stable_baselines3 import PPO
+from sb3_contrib import MaskablePPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from simulator.train.curriculum import make_env_for_stage
+from simulator.env.flatten_action_wrapper import FlattenActionEnv
 
 
 def main():
@@ -16,11 +17,14 @@ def main():
     args = ap.parse_args()
 
     def env_factory(i: int):
-        return lambda: make_env_for_stage(args.stage, seed=args.seed + i)
+        def _make():
+            base = make_env_for_stage(args.stage, seed=args.seed + i)
+            return FlattenActionEnv(base)
+        return _make
 
     vec = DummyVecEnv([env_factory(i) for i in range(args.n_envs)])
 
-    model = PPO(
+    model = MaskablePPO(
         "MultiInputPolicy",
         vec,
         verbose=1,

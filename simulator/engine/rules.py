@@ -110,6 +110,14 @@ def _resolve_build(s: EngineState, cmds: CommandSet) -> None:
         if relay_id is None:
             continue
         cs_eff = apply_relay_penalty(cs_base, relay_id, usage)
+        # Overflow check: new construction (first progress tick) counts against limit
+        is_new_construction = target not in s.constructions
+        if is_new_construction:
+            current_total = len(s.plantations) + sum(
+                1 for c in s.constructions.values() if c.progress > 0
+            )
+            if current_total >= s.effective_plantation_limit():
+                _remove_oldest_plantation(s)
         if target not in s.constructions:
             s.constructions[target] = Construction(
                 position=target, progress=0,
@@ -138,6 +146,30 @@ def _resolve_build(s: EngineState, cmds: CommandSet) -> None:
         s.events_this_turn.append(
             ConstructionCompleted(position=pos, new_plantation_id=new_id)
         )
+def _remove_oldest_plantation(s: EngineState) -> None:
+    """Remove the oldest plantation (min built_on_turn).
+    If it's the HQ, sets hq_id=None and applies 5% score penalty;
+    respawn phase handles recreation on next tick."""
+    from simulator.engine.events import PlantationDestroyed, HQLost
+    if not s.plantations:
+        return
+    min_built = min(p.built_on_turn for p in s.plantations.values())
+    oldest = [pid for pid, p in s.plantations.items() if p.built_on_turn == min_built]
+    idx = int(s.rng.integers(0, len(oldest)))
+    victim_id = oldest[idx]
+    victim = s.plantations.pop(victim_id)
+    was_main = victim.is_main
+    s.events_this_turn.append(
+        PlantationDestroyed(plantation_id=victim_id, position=victim.position,
+                            was_main=was_main)
+    )
+    if was_main:
+        penalty = max(1, s.score * 5 // 100)
+        s.score -= penalty
+        s.events_this_turn.append(HQLost(prev_hq_id=victim_id, penalty=penalty))
+        s.hq_id = None
+
+
 def _resolve_sabotage(s: EngineState, cmds: CommandSet) -> None: ...
 def _resolve_beaver_attack(s: EngineState, cmds: CommandSet) -> None: ...
 def _resolve_relocate(s: EngineState, cmds: CommandSet) -> None: ...

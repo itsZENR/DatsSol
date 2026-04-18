@@ -50,10 +50,42 @@ Recommend monitoring this field in larger replay runs.
 
 **Baseline finding:** These fields all matched the dump (count=0).
 
+## Updated baseline (10 rounds full-turn replay)
+
+Measured 2026-04-18 at commit 7c8bf0e.
+Wall time: 8.5 seconds (post-optimization).
+
+### Top divergence fields (aggregated across 10 rounds)
+
+Rounds replayed: 1,2,3,4,5,6,7,8,9,10 = 4317 turn boundaries total.
+
+| Field | Count | Approx. rate per turn-boundary |
+|-------|-------|-------------------------------|
+| `score` | 161 | 3.73% |
+| `cell_missing` | 161 | 3.73% |
+| `plantation_set` | 149 | 3.45% |
+
+### Interpretation
+
+1. **plantation_set divergence (~3.45%)**: The replayed engine and dump disagree on which plantation IDs are present. This suggests either a plantation creation/destruction mismatch in the engine, or the dump captures a different snapshot timing than the simulated tick. Likely due to initial state construction missing some plantations or command processing order differences.
+
+2. **cell_missing and score divergence (~3.73% each)**: Both are directly related to plantation set discrepancies. Missing plantations mean missing cells (and their terraform points). The score field diverges because it's built from plantation-contributed points. These are consequences of the plantation_set issue rather than independent bugs.
+
+3. **All three fields correlate**: If N plantations are missing at turn boundary T, then exactly N cells are "missing" (not tracked), and score diverges by the sum of their terraformed values. The 3.45%–3.73% range suggests a systematic issue affecting 3–4% of turn boundaries.
+
+### Actionable findings
+
+- **Investigation needed**: Why do certain plantation IDs appear in the dump at a turn but not in the replayed engine state? Candidates:
+  - Initial state loading (`load_state_at` for first turn) missing plantations from CSV.
+  - Plantation lifecycle (placement/destruction commands) not replayed identically.
+  - Relay fallback (`relay = author`) causing command target mismatches on certain cells.
+
+- **Next step**: Add debug logging to compare planted positions at first turn boundary (round 1, turn 2) between engine and dump. Narrow down whether the gap is in loader or in tick logic.
+
 ## Next calibration steps (future work)
 
 1. Run extended replay on all 85 available rounds to increase sample size and surface any rare divergences.
 2. Add a "canonical" replay mode that excludes stochastic fields from diff scoring.
-3. Investigate any actionable divergences found in step 1; add minimal-reproduction unit tests (`tests/engine/test_parity_<field>.py`) and fix the underlying engine behavior.
+3. Investigate the plantation_set divergence; add minimal-reproduction unit tests (`tests/engine/test_parity_<field>.py`) and fix the underlying engine behavior.
 4. Add a parity gate to CI: on each PR, replay 10 rounds and fail if scoring-field divergence rate exceeds a budget (initial: loose, tightening over time).
 5. Consider extending the diff module to track weather and seismic events for completeness.

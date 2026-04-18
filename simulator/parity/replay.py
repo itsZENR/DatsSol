@@ -14,9 +14,20 @@ from simulator.parity.diff import diff_states, StateDiff
 
 
 def replay_round(dump: Path, round_id: int, max_turns: int | None = None) -> StateDiff:
+    import pandas as pd
     agg = StateDiff()
-    state = load_state_at(dump, round_id, 0)
-    t = 0
+
+    # Find first valid turn (skip turn 0/1 which are placeholders).
+    turns_df = pd.read_csv(dump / "turns.csv")
+    round_turns = turns_df[turns_df.round_id == round_id].sort_values("turn_no")
+    valid_turns = round_turns[round_turns["map_width"] > 0]["turn_no"].tolist()
+
+    if not valid_turns:
+        return agg
+
+    t = valid_turns[0]
+    state = load_state_at(dump, round_id, t)
+
     while True:
         actions = load_actions_for_turn(dump, round_id, t)
         next_state = tick(state, actions)
@@ -29,7 +40,7 @@ def replay_round(dump: Path, round_id: int, max_turns: int | None = None) -> Sta
             agg.field_counts[k] = agg.field_counts.get(k, 0) + v
         state = next_state
         t += 1
-        if max_turns is not None and t >= max_turns:
+        if max_turns is not None and t - valid_turns[0] >= max_turns:
             break
     return agg
 

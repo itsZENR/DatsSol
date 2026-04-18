@@ -26,14 +26,14 @@ def test_default_config_values():
     assert cfg.storm_prob == 0.10
     assert cfg.earthquake_prob == 0.05
     assert cfg.immunity_turns == 3
-    assert cfg.cell_degradation_delay == 30
+    assert cfg.cell_degradation_delay == 20
     assert cfg.cell_degradation_per_turn == 10
     assert cfg.round_turns == 600
     assert cfg.normal_cell_reward == 1000
     assert cfg.boosted_cell_reward == 1500
     assert cfg.boosted_mod == 7
-    assert cfg.map_width == 298
-    assert cfg.map_height == 298
+    assert cfg.map_width == 278
+    assert cfg.map_height == 278
     assert cfg.beaver_kill_multiplier == 20
 
 

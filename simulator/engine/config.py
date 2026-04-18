@@ -45,7 +45,7 @@ class GameConfig:
     earthquake_prob: float = 0.05
 
     # Cells
-    cell_degradation_delay: int = 30   # 2026-04-18 balance: 40 -> 30
+    cell_degradation_delay: int = 20   # 2026-04-18 balance: 40 -> 30 -> 20
     cell_degradation_per_turn: int = 10
     normal_cell_reward: int = 1000
     boosted_cell_reward: int = 1500
@@ -57,6 +57,6 @@ class GameConfig:
     # Round
     round_turns: int = 600
 
-    # Map (2026-04-18 balance: 378x378 -> 298x298). Override via replace for curriculum.
-    map_width: int = 298
-    map_height: int = 298
+    # Map (2026-04-18 balance: 378x378 -> 298x298 -> 278x278). Override via replace for curriculum.
+    map_width: int = 278
+    map_height: int = 278

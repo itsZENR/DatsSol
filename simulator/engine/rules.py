@@ -231,7 +231,26 @@ def _resolve_beaver_attack(s: EngineState, cmds: CommandSet) -> None:
                 BeaverKilled(beaver_id=bid, position=b.position, reward=reward)
             )
             del s.beavers[bid]
-def _resolve_relocate(s: EngineState, cmds: CommandSet) -> None: ...
+def _resolve_relocate(s: EngineState, cmds: CommandSet) -> None:
+    from simulator.engine.spatial import manhattan
+
+    if not cmds.relocate or len(cmds.relocate) < 2:
+        return
+    src, dst = cmds.relocate[0], cmds.relocate[-1]
+    if manhattan(src, dst) != 1:
+        return  # only orthogonal adjacent
+    pos_to_id = {p.position: pid for pid, p in s.plantations.items()}
+    src_id = pos_to_id.get(src)
+    dst_id = pos_to_id.get(dst)
+    if src_id is None or dst_id is None:
+        return
+    if src_id != s.hq_id:
+        return  # HQ must be at src
+    if dst_id not in s.connected_ids:
+        return
+    s.plantations[src_id].is_main = False
+    s.plantations[dst_id].is_main = True
+    s.hq_id = dst_id
 def _resolve_beaver_damage(s: EngineState) -> None: ...
 def _resolve_degradation(s: EngineState) -> None: ...
 def _resolve_meteo(s: EngineState) -> None: ...

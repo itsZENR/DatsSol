@@ -75,6 +75,8 @@ def _resolve_repair(s: EngineState, cmds: CommandSet) -> None:
         target_id = pos_to_id.get(cmd.target)
         if target_id is None:
             continue  # not a repair — other phases handle this
+        if target_id not in s.connected_ids:
+            continue  # cannot repair enemy
         if target_id == pos_to_id.get(cmd.author):
             continue  # cannot repair self
         target = s.plantations[target_id]
@@ -170,7 +172,37 @@ def _remove_oldest_plantation(s: EngineState) -> None:
         s.hq_id = None
 
 
-def _resolve_sabotage(s: EngineState, cmds: CommandSet) -> None: ...
+def _resolve_sabotage(s: EngineState, cmds: CommandSet) -> None:
+    from simulator.engine.validation import is_valid_command
+    from simulator.engine.effects import RelayUsage, apply_relay_penalty
+    from simulator.engine.events import PlantationDestroyed, Scored
+
+    pos_to_id = {p.position: pid for pid, p in s.plantations.items()}
+    usage = RelayUsage()
+    se_base = s.config.se
+
+    for cmd in cmds.commands:
+        if not is_valid_command(s, cmd):
+            continue
+        target_id = pos_to_id.get(cmd.target)
+        if target_id is None or target_id not in s.enemy_ids:
+            continue
+        enemy = s.plantations[target_id]
+        if enemy.immunity_until_turn > s.turn_no:
+            continue
+        relay_id = pos_to_id[cmd.relay]
+        dmg = apply_relay_penalty(se_base, relay_id, usage)
+        enemy.hp -= dmg
+        if enemy.hp <= 0:
+            reward = s.cell_reward(enemy.position)
+            s.score += reward
+            s.events_this_turn.append(Scored(amount=reward, source="sabotage"))
+            s.events_this_turn.append(
+                PlantationDestroyed(plantation_id=target_id,
+                                    position=enemy.position, was_main=False)
+            )
+            del s.plantations[target_id]
+            s.enemy_ids.discard(target_id)
 def _resolve_beaver_attack(s: EngineState, cmds: CommandSet) -> None: ...
 def _resolve_relocate(s: EngineState, cmds: CommandSet) -> None: ...
 def _resolve_beaver_damage(s: EngineState) -> None: ...

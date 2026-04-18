@@ -31,6 +31,7 @@ class EngineState:
     events_this_turn: list[Event] = field(default_factory=list)
     connected_ids: set[PlantID] = field(default_factory=set)
     next_plant_counter: int = 0
+    enemy_ids: set[str] = field(default_factory=set)
 
     @classmethod
     def new(cls, config: GameConfig, seed: int) -> "EngineState":

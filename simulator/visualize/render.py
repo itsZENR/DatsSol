@@ -124,7 +124,49 @@ def _load_policy(model_path: Optional[Path]):
     return MaskablePPO.load(model_path)
 
 
-def _act(env: FlattenActionEnv, policy, obs) -> np.ndarray:
+def _random_masked_action(env: FlattenActionEnv, rng: np.random.Generator) -> np.ndarray:
+    """Sample a random valid action with correlated sub-choices.
+    Bias towards COMMAND actions and use author as relay (always valid self-relay)."""
+    from simulator.env.action_space import ActionKind as _AK, MAX_PLANT, TARGET_OFFSET_DIM, N_UPGRADES
+    nvec = env.NVEC
+    mask = env.action_masks()
+    offsets = np.concatenate([[0], np.cumsum(nvec)])
+    kind_mask = mask[offsets[0]:offsets[1]]
+    author_mask = mask[offsets[1]:offsets[2]]
+
+    # Bias: if COMMAND is valid, pick it with 70% probability
+    valid_kinds = np.flatnonzero(kind_mask)
+    if int(_AK.COMMAND) in valid_kinds and rng.random() < 0.7:
+        kind = int(_AK.COMMAND)
+    else:
+        kind = int(rng.choice(valid_kinds))
+
+    out = np.zeros(len(nvec), dtype=np.int64)
+    out[0] = kind
+
+    if kind == int(_AK.COMMAND):
+        valid_authors = np.flatnonzero(author_mask)
+        if len(valid_authors) == 0:
+            out[0] = int(_AK.END_TURN)
+            return out
+        a = int(rng.choice(valid_authors))
+        out[1] = a
+        out[2] = a  # relay = author (always-valid self-relay)
+        # Pick any target offset in AR range (all 25 are geometrically valid;
+        # engine will reject if hits own plant/mountain/beaver but often yields a build)
+        out[3] = int(rng.integers(0, TARGET_OFFSET_DIM))
+        out[4] = 0
+    elif kind == int(_AK.SET_UPGRADE):
+        upg_mask = mask[offsets[4]:offsets[5]]
+        valid_u = np.flatnonzero(upg_mask)
+        out[4] = int(rng.choice(valid_u)) if len(valid_u) else 0
+    # END_TURN/NOOP/SET_RELOCATE — sub-indices don't matter
+    return out
+
+
+def _act(env: FlattenActionEnv, policy, obs, rng: np.random.Generator | None = None) -> np.ndarray:
+    if policy == "random":
+        return _random_masked_action(env, rng)
     if policy is None:
         # Scripted "end-turn always" fallback
         return np.array([int(ActionKind.END_TURN), 0, 0, 0, 0], dtype=np.int64)
@@ -140,17 +182,19 @@ def render_episode(
     seed: int,
     out: Path,
     fps: int = 6,
+    random_policy: bool = False,
 ):
     base = DatssolEnv(seed=seed, map_size=map_size, round_turns=round_turns)
     env = FlattenActionEnv(base)
-    policy = _load_policy(model_path)
+    policy = "random" if random_policy else _load_policy(model_path)
+    rng = np.random.default_rng(seed)
 
     obs, _ = env.reset()
     snapshots = [_snapshot(env.env.state)]
     micro = 0
     done = False
     while not done:
-        action = _act(env, policy, obs)
+        action = _act(env, policy, obs, rng)
         obs, r, term, trunc, _ = env.step(action)
         micro += 1
         # Snapshot only after turn advances (end-turn executed)
@@ -184,6 +228,8 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", type=Path, default=Path("demo.gif"))
     ap.add_argument("--fps", type=int, default=6)
+    ap.add_argument("--random", action="store_true",
+                    help="Use random valid actions (no model required)")
     args = ap.parse_args()
 
     render_episode(
@@ -193,6 +239,7 @@ def main():
         seed=args.seed,
         out=args.out,
         fps=args.fps,
+        random_policy=args.random,
     )
 
 

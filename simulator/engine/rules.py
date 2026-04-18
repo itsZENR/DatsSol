@@ -365,6 +365,9 @@ def _resolve_terraform_and_score(s: EngineState) -> None:
 
     # Plantations on 100% cells disappear
     for pid in completed:
+        # If HQ was the one disappearing, clear hq_id so respawn logic fires.
+        if pid == s.hq_id:
+            s.hq_id = None
         s.plantations.pop(pid, None)
 
     # Degrade completed cells after delay

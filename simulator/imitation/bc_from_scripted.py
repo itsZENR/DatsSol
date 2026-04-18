@@ -122,10 +122,15 @@ def main():
 
     # Init MaskablePPO with the right env so weights shape is correct.
     vec = DummyVecEnv([lambda: make_env(999)])
+    from simulator.env.attention_extractor import AttentionExtractor
+    policy_kwargs = {
+        "features_extractor_class": AttentionExtractor,
+        "features_extractor_kwargs": {"features_dim": 256},
+    }
     model = MaskablePPO(
         "MultiInputPolicy", vec, verbose=0,
         n_steps=256, batch_size=64, learning_rate=args.lr, gamma=0.99,
-        ent_coef=0.03, seed=0,
+        ent_coef=0.03, policy_kwargs=policy_kwargs, seed=0,
     )
     policy = model.policy
     device = policy.device

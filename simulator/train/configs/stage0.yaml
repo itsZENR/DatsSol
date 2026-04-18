@@ -1,5 +1,6 @@
 map_size: [30, 30]
 round_turns: 100
-beavers_enabled: false
-meteo_enabled: false
 promote_reward_threshold: 100.0
+game_config_overrides:
+  initial_beavers: 2
+  initial_mountain_density: 0.02

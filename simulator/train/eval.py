@@ -28,7 +28,28 @@ def main():
             round_turns=args.round_turns
         )
     env = FlattenActionEnv(base)
-    model = MaskablePPO.load(args.model, env=env)
+    try:
+        model = MaskablePPO.load(args.model, env=env)
+    except ValueError:
+        # Frozen-backbone checkpoints have optimizer-state mismatch. Load model params
+        # via lower-level API and skip optimizer loading entirely.
+        import torch
+        from stable_baselines3.common.save_util import load_from_zip_file
+        from sb3_contrib import MaskablePPO as _MPPO
+        from simulator.env.attention_extractor import AttentionExtractor
+        data, params, _ = load_from_zip_file(
+            str(args.model), device="cuda" if torch.cuda.is_available() else "cpu",
+        )
+        policy_kwargs = data.get("policy_kwargs") or {
+            "features_extractor_class": AttentionExtractor,
+            "features_extractor_kwargs": {"features_dim": 256},
+        }
+        model = _MPPO(
+            "MultiInputPolicy", env,
+            policy_kwargs=policy_kwargs,
+            device="cuda" if torch.cuda.is_available() else "cpu",
+        )
+        model.policy.load_state_dict(params["policy"])
 
     total_rewards = []
     scores = []

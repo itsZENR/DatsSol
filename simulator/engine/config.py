@@ -60,3 +60,7 @@ class GameConfig:
     # Map (2026-04-18 balance: 378x378 -> 298x298 -> 278x278). Override via replace for curriculum.
     map_width: int = 278
     map_height: int = 278
+
+    # Random map content at reset (used by DatssolEnv; 0 = disabled).
+    initial_beavers: int = 0
+    initial_mountain_density: float = 0.0   # fraction of cells as mountains (0.0 to ~0.1)

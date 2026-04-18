@@ -69,12 +69,52 @@ class DatssolEnv(gym.Env):
             **self._game_config_overrides,
         )
         self.state = EngineState.new(cfg, seed=self._seed)
+        self._populate_initial_map()
         # First tick spawns the HQ via _resolve_respawn
         self.state = tick(self.state, CommandSet())
         self._reset_turn_context()
         obs = encode_observation(self.state, self._ctx.authors_used)
         info = {"action_mask": build_action_mask(self.state, self._ctx)}
         return obs, info
+
+    def _populate_initial_map(self):
+        """Spawn initial beavers and mountains based on config."""
+        from simulator.engine.entities import Beaver
+        cfg = self.state.config
+        w, h = cfg.map_width, cfg.map_height
+        rng = self.state.rng
+
+        # Mountains: uniform random cells
+        if cfg.initial_mountain_density > 0:
+            n = int(w * h * cfg.initial_mountain_density)
+            mtn = set()
+            while len(mtn) < n:
+                x = int(rng.integers(0, w))
+                y = int(rng.integers(0, h))
+                # Keep (1,1) and nearby clear for HQ spawn
+                if abs(x - 1) + abs(y - 1) < 5:
+                    continue
+                mtn.add((x, y))
+            self.state.mountains = frozenset(mtn)
+
+        # Beavers: placed at random non-mountain cells, not too close to HQ (1,1)
+        if cfg.initial_beavers > 0:
+            placed = 0
+            attempts = 0
+            while placed < cfg.initial_beavers and attempts < 1000:
+                attempts += 1
+                x = int(rng.integers(0, w))
+                y = int(rng.integers(0, h))
+                if (x, y) in self.state.mountains:
+                    continue
+                if abs(x - 1) + abs(y - 1) < 8:  # not adjacent to HQ
+                    continue
+                bid = f"b{placed}"
+                self.state.beavers[bid] = Beaver(
+                    id=bid, position=(x, y), hp=cfg.beaver_max_hp,
+                    last_hit_by={}, total_damage_this_turn={},
+                )
+                placed += 1
 
     def _reset_turn_context(self):
         self._ctx = TurnContext()

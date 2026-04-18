@@ -121,7 +121,31 @@ def _load_policy(model_path: Optional[Path]):
     if model_path is None:
         return None
     from sb3_contrib import MaskablePPO
-    return MaskablePPO.load(model_path)
+    try:
+        return MaskablePPO.load(model_path)
+    except ValueError:
+        # Frozen-backbone optimizer mismatch — load params only.
+        import torch
+        from stable_baselines3.common.save_util import load_from_zip_file
+        from simulator.env.attention_extractor import AttentionExtractor
+        from simulator.env.datssol_env import DatssolEnv
+        from simulator.env.flatten_action_wrapper import FlattenActionEnv
+        data, params, _ = load_from_zip_file(
+            str(model_path), device="cuda" if torch.cuda.is_available() else "cpu"
+        )
+        policy_kwargs = data.get("policy_kwargs") or {
+            "features_extractor_class": AttentionExtractor,
+            "features_extractor_kwargs": {"features_dim": 256},
+        }
+        # Dummy env just to initialize shapes
+        dummy = FlattenActionEnv(DatssolEnv(seed=0, map_size=(30, 30), round_turns=10))
+        model = MaskablePPO(
+            "MultiInputPolicy", dummy,
+            policy_kwargs=policy_kwargs,
+            device="cuda" if torch.cuda.is_available() else "cpu",
+        )
+        model.policy.load_state_dict(params["policy"])
+        return model
 
 
 def _random_masked_action(env: FlattenActionEnv, rng: np.random.Generator) -> np.ndarray:

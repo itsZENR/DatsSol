@@ -69,8 +69,12 @@ def main():
     ap.add_argument("--eval-freq", type=int, default=50_000)
     ap.add_argument("--ent-coef", type=float, default=0.05,
                     help="Entropy coefficient — higher = more exploration. 0.05 encourages actual building.")
-    ap.add_argument("--n-steps", type=int, default=512)
-    ap.add_argument("--batch-size", type=int, default=128)
+    ap.add_argument("--n-steps", type=int, default=2048)
+    ap.add_argument("--batch-size", type=int, default=256)
+    ap.add_argument("--n-epochs", type=int, default=10)
+    ap.add_argument("--lr", type=float, default=1e-4)
+    ap.add_argument("--attention", action="store_true",
+                    help="Use AttentionExtractor (vs default MLP)")
     ap.add_argument("--resume", type=Path, default=None,
                     help="Resume from a saved model")
     args = ap.parse_args()
@@ -108,15 +112,28 @@ def main():
         model = MaskablePPO.load(str(args.resume), env=vec)
         print(f"Resumed from {args.resume}", flush=True)
     else:
+        policy_kwargs = {}
+        if args.attention:
+            from simulator.env.attention_extractor import AttentionExtractor
+            policy_kwargs = {
+                "features_extractor_class": AttentionExtractor,
+                "features_extractor_kwargs": {"features_dim": 256},
+            }
+            print("Using AttentionExtractor", flush=True)
         model = MaskablePPO(
             "MultiInputPolicy",
             vec,
             verbose=1,
             n_steps=args.n_steps,
             batch_size=args.batch_size,
-            learning_rate=3e-4,
+            learning_rate=args.lr,
             gamma=0.99,
+            gae_lambda=0.95,
             ent_coef=args.ent_coef,
+            vf_coef=0.5,
+            max_grad_norm=0.5,
+            n_epochs=args.n_epochs,
+            policy_kwargs=policy_kwargs,
             seed=args.seed,
         )
 

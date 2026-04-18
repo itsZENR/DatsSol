@@ -34,8 +34,8 @@ def test_hq_loss_reward_is_pure_score_delta():
     assert abs(r - (-0.05)) < 1e-6
 
 
-def test_construction_completed_adds_build_bonus():
-    from simulator.env.reward import B_BUILD
+def test_construction_completed_no_longer_shaped():
+    # Pure-score reward: construction completion itself gives no bonus.
     from simulator.engine.events import ConstructionCompleted
     r = compute_reward(0, 0, [ConstructionCompleted(position=(1, 2), new_plantation_id="p1")], None)
-    assert abs(r - B_BUILD) < 1e-6
+    assert abs(r - 0.0) < 1e-6

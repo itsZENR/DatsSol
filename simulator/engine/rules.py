@@ -203,7 +203,34 @@ def _resolve_sabotage(s: EngineState, cmds: CommandSet) -> None:
             )
             del s.plantations[target_id]
             s.enemy_ids.discard(target_id)
-def _resolve_beaver_attack(s: EngineState, cmds: CommandSet) -> None: ...
+def _resolve_beaver_attack(s: EngineState, cmds: CommandSet) -> None:
+    from simulator.engine.validation import is_valid_command
+    from simulator.engine.effects import RelayUsage, apply_relay_penalty
+    from simulator.engine.events import BeaverKilled, Scored
+
+    pos_to_beaver = {b.position: bid for bid, b in s.beavers.items()}
+    pos_to_id = {p.position: pid for pid, p in s.plantations.items()}
+    usage = RelayUsage()
+    be_base = s.config.be
+
+    for cmd in cmds.commands:
+        if not is_valid_command(s, cmd):
+            continue
+        bid = pos_to_beaver.get(cmd.target)
+        if bid is None:
+            continue
+        b = s.beavers[bid]
+        relay_id = pos_to_id.get(cmd.relay, "?")
+        dmg = apply_relay_penalty(be_base, relay_id, usage)
+        b.hp -= dmg
+        if b.hp <= 0:
+            reward = s.cell_reward(b.position) * s.config.beaver_kill_multiplier
+            s.score += reward
+            s.events_this_turn.append(Scored(amount=reward, source="beaver"))
+            s.events_this_turn.append(
+                BeaverKilled(beaver_id=bid, position=b.position, reward=reward)
+            )
+            del s.beavers[bid]
 def _resolve_relocate(s: EngineState, cmds: CommandSet) -> None: ...
 def _resolve_beaver_damage(s: EngineState) -> None: ...
 def _resolve_degradation(s: EngineState) -> None: ...

@@ -282,7 +282,46 @@ def _resolve_degradation(s: EngineState) -> None:
     for pos, c in list(s.constructions.items()):
         if c.last_progress_turn < s.turn_no:
             c.progress = max(0, c.progress - ds)
-def _resolve_meteo(s: EngineState) -> None: ...
+def _resolve_meteo(s: EngineState) -> None:
+    from simulator.engine.spatial import in_disc
+
+    # Earthquake
+    if s.earthquake_turn is not None and s.earthquake_turn <= s.turn_no:
+        dmg = s.effective_earthquake_damage()
+        for p in s.plantations.values():
+            if p.immunity_until_turn > s.turn_no:
+                continue
+            p.hp -= dmg
+        for c in s.constructions.values():
+            c.progress = max(0, c.progress - dmg)
+        s.earthquake_turn = None
+
+    # Storms
+    surviving: list = []
+    for storm in s.storms:
+        if storm.forming_left > 0:
+            storm.forming_left -= 1
+            surviving.append(storm)
+            continue
+        # Damage inside disc
+        for p in s.plantations.values():
+            if p.immunity_until_turn > s.turn_no:
+                continue
+            if in_disc(storm.position, p.position, storm.radius):
+                # HP cannot drop below storm_min_hp
+                if p.hp > s.config.storm_min_hp:
+                    p.hp = max(s.config.storm_min_hp, p.hp - s.config.storm_damage)
+        for c in s.constructions.values():
+            if in_disc(storm.position, c.position, storm.radius):
+                c.progress = max(0, c.progress - s.config.storm_damage)
+        # Movement
+        nx = storm.position[0] + storm.direction[0] * storm.speed
+        ny = storm.position[1] + storm.direction[1] * storm.speed
+        w, h = s.config.map_width, s.config.map_height
+        if -storm.radius <= nx <= w + storm.radius and -storm.radius <= ny <= h + storm.radius:
+            storm.position = (nx, ny)
+            surviving.append(storm)
+    s.storms = surviving
 def _resolve_terraform_and_score(s: EngineState) -> None: ...
 def _resolve_respawn(s: EngineState) -> None: ...
 def _spawn_new_meteo(s: EngineState) -> None: ...

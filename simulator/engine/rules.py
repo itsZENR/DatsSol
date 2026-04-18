@@ -60,7 +60,27 @@ def _apply_upgrade(s: EngineState, cmds: CommandSet) -> None:
     )
 
 
-def _resolve_repair(s: EngineState, cmds: CommandSet) -> None: ...
+def _resolve_repair(s: EngineState, cmds: CommandSet) -> None:
+    from simulator.engine.validation import is_valid_command
+    from simulator.engine.effects import RelayUsage, apply_relay_penalty
+
+    pos_to_id = {p.position: pid for pid, p in s.plantations.items()}
+    mhp = s.effective_mhp()
+    rs = s.effective_rs()
+    usage = RelayUsage()
+
+    for cmd in cmds.commands:
+        if not is_valid_command(s, cmd):
+            continue
+        target_id = pos_to_id.get(cmd.target)
+        if target_id is None:
+            continue  # not a repair — other phases handle this
+        if target_id == pos_to_id.get(cmd.author):
+            continue  # cannot repair self
+        target = s.plantations[target_id]
+        relay_id = pos_to_id[cmd.relay]
+        heal = apply_relay_penalty(rs, relay_id, usage)
+        target.hp = min(mhp, target.hp + heal)
 def _resolve_build(s: EngineState, cmds: CommandSet) -> None: ...
 def _resolve_sabotage(s: EngineState, cmds: CommandSet) -> None: ...
 def _resolve_beaver_attack(s: EngineState, cmds: CommandSet) -> None: ...

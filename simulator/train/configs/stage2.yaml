@@ -1,0 +1,6 @@
+map_size: [100, 100]
+round_turns: 600
+beavers_enabled: true
+meteo_enabled: true
+beaver_density: 1.0
+promote_reward_threshold: 600.0

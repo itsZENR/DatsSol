@@ -26,25 +26,36 @@ from simulator.env.datssol_env import DatssolEnv
 from simulator.env.flatten_action_wrapper import FlattenActionEnv
 from simulator.env.action_space import ActionKind
 from simulator.visualize.scripted_policy import ScriptedGreedyBuilder
+from simulator.visualize.scripted_go import ScriptedGo
 from simulator.train.curriculum import make_env_for_stage
 
 
 def collect_scripted_trajectories(
-    make_env, n_episodes: int, seed_base: int = 0
+    make_env, n_episodes: int, seed_base: int = 0, teacher: str = "go",
 ) -> list[tuple[dict, np.ndarray]]:
-    """Run scripted policy for n episodes, collect (obs, action) pairs."""
+    """Run scripted teacher for n episodes, collect (obs, action) pairs.
+
+    teacher: 'v1' (ScriptedGreedyBuilder) or 'go' (ScriptedGo — ported from Go conveyor).
+    """
     samples: list[tuple[dict, np.ndarray]] = []
     for ep in range(n_episodes):
         env = make_env(seed_base + ep)
-        policy = ScriptedGreedyBuilder()
+        if teacher == "go":
+            policy = ScriptedGo()
+        else:
+            policy = ScriptedGreedyBuilder()
         obs, _ = env.reset()
         policy.reset()
         used_authors: set = set()
         relocated = False
+        first_of_turn = True
         done = False
         while not done:
-            action, ends_turn, _ = policy.act(env, used_authors, relocated)
-            # Snapshot (obs, action)
+            if teacher == "go":
+                action, ends_turn = policy.act(env, used_authors, relocated, first_of_turn)
+            else:
+                action, ends_turn, _ = policy.act(env, used_authors, relocated)
+            first_of_turn = False
             sample_obs = {k: np.array(v, copy=True) for k, v in obs.items()}
             samples.append((sample_obs, action.copy()))
             if action[0] == int(ActionKind.COMMAND):
@@ -59,6 +70,7 @@ def collect_scripted_trajectories(
             if ends_turn:
                 used_authors = set()
                 relocated = False
+                first_of_turn = True
             obs, _r, term, trunc, _ = env.step(action)
             done = term or trunc
         final_score = env.env.state.score
@@ -94,6 +106,7 @@ def main():
     ap.add_argument("--batch-size", type=int, default=128)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--out", type=Path, default=Path("ppo_bc_init"))
+    ap.add_argument("--teacher", type=str, default="go", choices=["v1", "go"])
     args = ap.parse_args()
 
     def make_env(seed):
@@ -103,8 +116,8 @@ def main():
         )
         return FlattenActionEnv(base)
 
-    print(f"Collecting {args.episodes} scripted episodes on stage {args.stage}...", flush=True)
-    samples = collect_scripted_trajectories(make_env, args.episodes)
+    print(f"Collecting {args.episodes} scripted ({args.teacher}) episodes on stage {args.stage}...", flush=True)
+    samples = collect_scripted_trajectories(make_env, args.episodes, teacher=args.teacher)
     print(f"\nTotal samples: {len(samples)}", flush=True)
 
     # Init MaskablePPO with the right env so weights shape is correct.

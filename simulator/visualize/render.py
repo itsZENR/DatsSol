@@ -183,8 +183,14 @@ def render_episode(
     out: Path,
     fps: int = 6,
     random_policy: bool = False,
+    stage: Optional[str] = None,
 ):
-    base = DatssolEnv(seed=seed, map_size=map_size, round_turns=round_turns)
+    if stage is not None:
+        from simulator.train.curriculum import make_env_for_stage
+        s = int(stage) if stage.isdigit() else stage
+        base = make_env_for_stage(s, seed=seed)
+    else:
+        base = DatssolEnv(seed=seed, map_size=map_size, round_turns=round_turns)
     env = FlattenActionEnv(base)
     policy = "random" if random_policy else _load_policy(model_path)
     rng = np.random.default_rng(seed)
@@ -230,6 +236,8 @@ def main():
     ap.add_argument("--fps", type=int, default=6)
     ap.add_argument("--random", action="store_true",
                     help="Use random valid actions (no model required)")
+    ap.add_argument("--stage", type=str, default=None,
+                    help="Use stage config (e.g. 0_ez) — overrides map-size/turns")
     args = ap.parse_args()
 
     render_episode(
@@ -240,6 +248,7 @@ def main():
         out=args.out,
         fps=args.fps,
         random_policy=args.random,
+        stage=args.stage,
     )
 
 

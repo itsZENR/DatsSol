@@ -72,7 +72,7 @@ class DatssolEnv(gym.Env):
         # First tick spawns the HQ via _resolve_respawn
         self.state = tick(self.state, CommandSet())
         self._reset_turn_context()
-        obs = encode_observation(self.state)
+        obs = encode_observation(self.state, self._ctx.authors_used)
         info = {"action_mask": build_action_mask(self.state, self._ctx)}
         return obs, info
 
@@ -151,6 +151,6 @@ class DatssolEnv(gym.Env):
             self.state.hq_id is None and self.state.score < 0
         )
         truncated = False
-        obs = encode_observation(self.state)
+        obs = encode_observation(self.state, self._ctx.authors_used)
         info = {"action_mask": build_action_mask(self.state, self._ctx)}
         return obs, float(reward), terminated, truncated, info

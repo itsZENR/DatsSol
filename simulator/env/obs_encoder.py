@@ -14,7 +14,14 @@ GRID_CHANNELS = 10
 GRID_SIZE = 31  # ±15 around HQ
 
 
-def encode_observation(state: EngineState) -> dict:
+def encode_observation(state: EngineState, used_authors: set | None = None) -> dict:
+    """Encode state into obs dict.
+
+    `used_authors` — ids of plantations already used as author in the current turn
+    (from FlattenActionEnv's turn context). Policy can see which are free vs used.
+    """
+    if used_authors is None:
+        used_authors = set()
     hq = state.get_hq()
     hq_pos = hq.position if hq else (0, 0)
     mhp = state.effective_mhp()
@@ -48,7 +55,7 @@ def encode_observation(state: EngineState) -> dict:
             float(p.built_on_turn == oldest_turn),
             0.0,  # n_connected_neighbors placeholder
             0.0,  # in_storm placeholder
-            1.0,  # available_this_turn — updated by env wrapper
+            0.0 if pid in used_authors else 1.0,  # available_this_turn
         ]
         self_mask[i] = True
 
@@ -118,7 +125,7 @@ def encode_observation(state: EngineState) -> dict:
             if (x, y) in own_positions:
                 grid[1, gx, gy] = 1.0
             if (x, y) in state.constructions:
-                grid[2, gx, gy] = 1.0
+                grid[2, gx, gy] = state.constructions[(x, y)].progress / 50.0
             if (x, y) in enemy_positions:
                 grid[3, gx, gy] = 1.0
             if (x, y) in beaver_positions:

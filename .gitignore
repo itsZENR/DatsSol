@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.pt
+bc_weights.pt
+ppo_model/
+ppo_model.zip
+parity_report.json
+.venv/
+.env
+*.egg-info/
+dist/
+build/

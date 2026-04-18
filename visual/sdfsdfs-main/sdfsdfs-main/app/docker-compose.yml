@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: datssol
+      POSTGRES_PASSWORD: datssol
+      POSTGRES_DB: datssol
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datssol"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: collector
+    env_file: .env
+    environment:
+      DB_DSN: postgres://datssol:datssol@postgres:5432/datssol?sslmode=disable
+      DB_HOST: postgres
+      DB_USER: datssol
+      STATS_URL: https://games-test.datsteam.dev/stats/
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: dashboard
+    env_file: .env
+    environment:
+      DB_DSN: postgres://datssol:datssol@postgres:5432/datssol?sslmode=disable
+    ports:
+      - "${DASHBOARD_PORT:-8080}:${DASHBOARD_PORT:-8080}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  player:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: player
+    env_file: .env
+    environment:
+      DB_DSN: postgres://datssol:datssol@postgres:5432/datssol?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - play
+
+volumes:
+  pgdata:

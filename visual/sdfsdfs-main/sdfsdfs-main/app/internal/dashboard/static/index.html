@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DatsSol Dashboard</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #1a1a2e;
+  --panel: #16213e;
+  --border: #0f3460;
+  --accent: #00d4aa;
+  --danger: #e94560;
+  --warn: #f0a500;
+  --text: #e0e0e0;
+  --muted: #888;
+  --map-bg: #0a0a1a;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Courier New', Courier, monospace;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* ── TOP BAR ───────────────────────────────────────────── */
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+#topbar h1 {
+  color: var(--accent);
+  font-size: 16px;
+  letter-spacing: 2px;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.tb-label { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+select, input[type=range] {
+  background: var(--border);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+input[type=range] {
+  padding: 0;
+  accent-color: var(--accent);
+  width: 200px;
+  cursor: pointer;
+}
+
+#turnNumDisplay {
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: bold;
+  min-width: 60px;
+  text-align: right;
+}
+
+#playBtn {
+  background: var(--border);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+#playBtn:hover { background: var(--accent); color: var(--bg); }
+
+#statusBadge {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ── MAIN LAYOUT ───────────────────────────────────────── */
+#main {
+  display: flex;
+  height: calc(100vh - 46px);
+  overflow: hidden;
+}
+
+/* ── LEFT PANEL ────────────────────────────────────────── */
+#leftPanel {
+  flex: 0 0 60%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+#mapWrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--map-bg);
+}
+
+#mapCanvas {
+  display: block;
+  cursor: grab;
+}
+#mapCanvas.dragging { cursor: grabbing; }
+
+#mapTooltip {
+  position: absolute;
+  background: rgba(22,33,62,0.95);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 11px;
+  pointer-events: none;
+  display: none;
+  z-index: 10;
+  max-width: 200px;
+  line-height: 1.6;
+}
+
+/* ── RIGHT PANEL ───────────────────────────────────────── */
+#rightPanel {
+  flex: 0 0 40%;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  gap: 0;
+}
+
+.rpanel {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+}
+
+.rpanel-title {
+  color: var(--danger);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* ── STAT CARDS ────────────────────────────────────────── */
+#statsGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.stat-card {
+  background: var(--border);
+  border-radius: 4px;
+  padding: 6px 4px;
+  text-align: center;
+}
+.stat-card .sv {
+  font-size: 17px;
+  color: var(--accent);
+  line-height: 1.2;
+}
+.stat-card .sl {
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ── ROUND SUMMARY ─────────────────────────────────────── */
+#summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+/* ── SCORE CHART ───────────────────────────────────────── */
+#chartCanvas {
+  display: block;
+  width: 100%;
+  height: 120px;
+}
+
+/* ── OBJECT DETAILS ────────────────────────────────────── */
+#detailBox {
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 60px;
+}
+
+#detailBox .det-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+#detailBox .det-key { color: var(--muted); min-width: 90px; }
+#detailBox .det-val { color: var(--text); }
+
+/* scrollbar */
+#rightPanel::-webkit-scrollbar { width: 4px; }
+#rightPanel::-webkit-scrollbar-track { background: var(--bg); }
+#rightPanel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <h1>DATSSOL</h1>
+  <span class="tb-label">ROUND</span>
+  <button id="roundPrev" style="padding:2px 8px;cursor:pointer">&lt;</button>
+  <select id="roundSelect"></select>
+  <button id="roundNext" style="padding:2px 8px;cursor:pointer">&gt;</button>
+  <span class="tb-label">TURN</span>
+  <button id="turnPrev" style="padding:2px 8px;cursor:pointer">&lt;</button>
+  <input type="range" id="turnSlider" min="1" max="1" value="1">
+  <button id="turnNext" style="padding:2px 8px;cursor:pointer">&gt;</button>
+  <span id="turnNumDisplay">—</span>
+  <button id="playBtn">&#9654; Play</button>
+  <label style="margin-left:12px;cursor:pointer;user-select:none"><input type="checkbox" id="followToggle" checked> Follow</label>
+  <span id="statusBadge">—</span>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- LEFT: MAP -->
+  <div id="leftPanel">
+    <div id="mapWrap">
+      <canvas id="mapCanvas"></canvas>
+      <div id="mapTooltip"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: STATS / CHART / DETAILS -->
+  <div id="rightPanel">
+
+    <div class="rpanel">
+      <div class="rpanel-title">Current Turn</div>
+      <div id="statsGrid"></div>
+    </div>
+
+    <div class="rpanel">
+      <div class="rpanel-title">Round Summary</div>
+      <div id="summaryGrid"></div>
+    </div>
+
+    <div class="rpanel">
+      <div class="rpanel-title">Score / Turn</div>
+      <canvas id="chartCanvas" width="600" height="120"></canvas>
+    </div>
+
+    <div class="rpanel">
+      <div class="rpanel-title">Selected Object</div>
+      <div id="detailBox"></div>
+    </div>
+
+    <div class="rpanel">
+      <div class="rpanel-title" style="cursor:pointer" id="jsonToggle">Raw JSON [+]</div>
+      <pre id="jsonBox" style="display:none;overflow:auto;max-height:300px;font-size:10px;color:#aaa;background:#0a0a1a;padding:6px;border-radius:4px;white-space:pre-wrap;word-break:break-all"></pre>
+    </div>
+
+    <div class="rpanel">
+      <div class="rpanel-title">Strategy Config</div>
+      <div id="strategyBox" style="font-size:11px;color:#aaa"></div>
+    </div>
+
+
+  </div>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+// ── STATE ──────────────────────────────────────────────────────
+var state = {
+  rounds: [],
+  currentRoundId: null,
+  turns: [],          // [{turnNo, turnId}]
+  currentTurnNo: null,
+  turnData: null,
+  prevTurnData: null,  // fallback when no data for current turn
+  accumulated: null,
+  prevAccumulated: null,
+  scores: [],
+  gameLogs: [],
+  mountains: [],
+  roundStats: null,
+  isLatest: true,
+  userSelectedRound: false,
+  playing: false,
+  playInterval: null,
+  refreshInterval: null,
+  // map viewport
+  mapOffsetX: 0,
+  mapOffsetY: 0,
+  mapScale: 1,
+  mapDragging: false,
+  mapDragStartX: 0,
+  mapDragStartY: 0,
+  mapDragStartOX: 0,
+  mapDragStartOY: 0,
+  selectedObj: null,
+  hoveredObj: null
+};
+
+// ── DOM REFS ───────────────────────────────────────────────────
+var roundSelect   = document.getElementById('roundSelect');
+var turnSlider    = document.getElementById('turnSlider');
+var turnNumDisplay= document.getElementById('turnNumDisplay');
+var playBtn       = document.getElementById('playBtn');
+var statusBadge   = document.getElementById('statusBadge');
+var statsGrid     = document.getElementById('statsGrid');
+var summaryGrid   = document.getElementById('summaryGrid');
+var detailBox     = document.getElementById('detailBox');
+var strategyBox   = document.getElementById('strategyBox');
+var jsonBox       = document.getElementById('jsonBox');
+var jsonToggle    = document.getElementById('jsonToggle');
+
+jsonToggle.addEventListener('click', function() {
+  if (jsonBox.style.display === 'none') {
+    jsonBox.style.display = 'block';
+    jsonToggle.textContent = 'Raw JSON [-]';
+  } else {
+    jsonBox.style.display = 'none';
+    jsonToggle.textContent = 'Raw JSON [+]';
+  }
+});
+var followToggle  = document.getElementById('followToggle');
+var mapWrap       = document.getElementById('mapWrap');
+var mapCanvas     = document.getElementById('mapCanvas');
+var mapCtx        = mapCanvas.getContext('2d');
+var chartCanvas   = document.getElementById('chartCanvas');
+var chartCtx      = chartCanvas.getContext('2d');
+var mapTooltip    = document.getElementById('mapTooltip');
+
+// ── HELPERS ────────────────────────────────────────────────────
+function setStatus(msg) {
+  statusBadge.textContent = msg;
+}
+
+function el(tag, props) {
+  var e = document.createElement(tag);
+  if (props) {
+    Object.keys(props).forEach(function(k) {
+      if (k === 'textContent') e.textContent = props[k];
+      else if (k === 'className') e.className = props[k];
+      else if (k === 'style') Object.assign(e.style, props[k]);
+      else e.setAttribute(k, props[k]);
+    });
+  }
+  return e;
+}
+
+function createStatCard(value, label, color) {
+  var card = el('div', { className: 'stat-card' });
+  var sv = el('div', { className: 'sv', textContent: String(value) });
+  if (color) sv.style.color = color;
+  var sl = el('div', { className: 'sl', textContent: label });
+  card.appendChild(sv);
+  card.appendChild(sl);
+  return card;
+}
+
+function apiFetch(url) {
+  return fetch(url).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).catch(function(e) {
+    console.warn('API error', url, e);
+    return null;
+  });
+}
+
+// ── ROUNDS ────────────────────────────────────────────────────
+async function loadRounds() {
+  var rounds = await apiFetch('/api/rounds');
+  state.rounds = rounds || [];
+  roundSelect.textContent = '';
+  if (!state.rounds.length) {
+    var opt = el('option', { textContent: 'No rounds' });
+    roundSelect.appendChild(opt);
+    return;
+  }
+  state.rounds.forEach(function(r) {
+    var opt = el('option', { value: String(r.id) });
+    opt.textContent = '#' + r.roundNum + ' (' + r.totalTurns + ' turns)';
+    roundSelect.appendChild(opt);
+  });
+  var last = state.rounds[state.rounds.length - 1];
+  state.currentRoundId = last.id;
+  roundSelect.value = String(state.currentRoundId);
+}
+
+roundSelect.addEventListener('change', function() {
+  state.currentRoundId = parseInt(roundSelect.value, 10);
+  state.currentTurnNo = null;
+  state.userSelectedRound = true;
+  stopPlay();
+  loadRoundData();
+});
+
+function stepRound(delta) {
+  var idx = roundSelect.selectedIndex + delta;
+  if (idx < 0 || idx >= roundSelect.options.length) return;
+  roundSelect.selectedIndex = idx;
+  roundSelect.dispatchEvent(new Event('change'));
+}
+document.getElementById('roundPrev').addEventListener('click', function() { stepRound(-1); });
+document.getElementById('roundNext').addEventListener('click', function() { stepRound(1); });
+
+// ── TURNS ─────────────────────────────────────────────────────
+async function loadTurns() {
+  if (state.currentRoundId === null) return;
+  var turns = await apiFetch('/api/turns?round_id=' + state.currentRoundId);
+  if (!turns || !turns.length) {
+    // Keep previous slider state — don't reset
+    return;
+  }
+  state.turns = turns;
+  var nums = state.turns.map(function(t) { return t.turnNo; });
+  var minT = Math.min.apply(null, nums);
+  var maxT = Math.max.apply(null, nums);
+  turnSlider.min = minT;
+  turnSlider.max = maxT;
+  if (state.currentTurnNo === null || state.currentTurnNo > maxT) {
+    state.currentTurnNo = maxT;
+  }
+  turnSlider.value = state.currentTurnNo;
+  turnNumDisplay.textContent = state.currentTurnNo;
+}
+
+turnSlider.addEventListener('input', function() {
+  var v = parseInt(turnSlider.value, 10);
+  state.currentTurnNo = v;
+  turnNumDisplay.textContent = v;
+  var maxT = parseInt(turnSlider.max, 10);
+  state.isLatest = (v === maxT);
+  stopPlay();
+  loadTurnData();
+});
+
+function stepTurn(delta) {
+  var v = parseInt(turnSlider.value, 10) + delta;
+  var mn = parseInt(turnSlider.min, 10);
+  var mx = parseInt(turnSlider.max, 10);
+  if (v < mn || v > mx) return;
+  turnSlider.value = v;
+  turnSlider.dispatchEvent(new Event('input'));
+}
+document.getElementById('turnPrev').addEventListener('click', function() { stepTurn(-1); });
+document.getElementById('turnNext').addEventListener('click', function() { stepTurn(1); });
+
+// ── PLAY/PAUSE ─────────────────────────────────────────────────
+function stopPlay() {
+  if (state.playInterval) {
+    clearInterval(state.playInterval);
+    state.playInterval = null;
+  }
+  state.playing = false;
+  playBtn.textContent = '\u25B6 Play';
+}
+
+playBtn.addEventListener('click', function() {
+  if (state.playing) {
+    stopPlay();
+  } else {
+    state.playing = true;
+    playBtn.textContent = '\u23F8 Pause';
+    state.playInterval = setInterval(advanceTurn, 500); // 2 turns/sec
+  }
+});
+
+function advanceTurn() {
+  var maxT = parseInt(turnSlider.max, 10);
+  var next = state.currentTurnNo + 1;
+  if (next > maxT) {
+    stopPlay();
+    return;
+  }
+  state.currentTurnNo = next;
+  turnSlider.value = next;
+  turnNumDisplay.textContent = next;
+  state.isLatest = (next === maxT);
+  loadTurnData();
+}
+
+// ── ROUND DATA ─────────────────────────────────────────────────
+async function loadRoundData() {
+  if (state.currentRoundId === null) return;
+  setStatus('loading...');
+  await Promise.all([
+    loadTurns(),
+    loadScores(),
+    loadMountains(),
+    loadRoundStats(),
+    loadStrategyConfig()
+  ]);
+  await loadTurnData();
+  setupAutoRefresh();
+  setStatus('updated ' + new Date().toLocaleTimeString());
+}
+
+async function loadScores() {
+  var data = await apiFetch('/api/scores?round_id=' + state.currentRoundId);
+  state.scores = data || [];
+  drawChart();
+}
+
+async function loadMountains() {
+  var data = await apiFetch('/api/map?round_id=' + state.currentRoundId);
+  state.mountains = data || [];
+}
+
+async function loadRoundStats() {
+  var data = await apiFetch('/api/round_stats?round_id=' + state.currentRoundId);
+  state.roundStats = data || null;
+  renderSummary();
+}
+
+async function loadTurnData() {
+  if (state.currentRoundId === null || state.currentTurnNo === null) return;
+  var results = await Promise.all([
+    apiFetch('/api/turn?round_id=' + state.currentRoundId + '&turn_no=' + state.currentTurnNo),
+    apiFetch('/api/accumulated?round_id=' + state.currentRoundId + '&turn_no=' + state.currentTurnNo)
+  ]);
+  var newTurn = results[0];
+  var newAcc = results[1];
+
+  // If we got valid data, save it as prev for fallback
+  if (newTurn && newTurn.plantations) {
+    state.prevTurnData = newTurn;
+    state.prevAccumulated = newAcc;
+    state.turnData = newTurn;
+    state.accumulated = newAcc;
+  } else {
+    // No data for this turn/round — use previous as fallback
+    state.turnData = state.prevTurnData;
+    state.accumulated = state.prevAccumulated;
+  }
+
+  renderStats();
+  drawMap();
+
+  // Update raw JSON panel.
+  if (state.turnData && jsonBox.style.display !== 'none') {
+    jsonBox.textContent = JSON.stringify(state.turnData, null, 2);
+  }
+
+  // Follow player: center map on CU
+  if (followToggle.checked && state.turnData && state.turnData.plantations) {
+    var cu = null;
+    for (var i = 0; i < state.turnData.plantations.length; i++) {
+      if (state.turnData.plantations[i].isMain) {
+        cu = state.turnData.plantations[i];
+        break;
+      }
+    }
+    if (cu) {
+      var cw = mapCanvas.width;
+      var ch = mapCanvas.height;
+      state.mapOffsetX = cw / 2 - (cu.x + 0.5) * state.mapScale;
+      state.mapOffsetY = ch / 2 - (cu.y + 0.5) * state.mapScale;
+      drawMap();
+    }
+  }
+}
+
+async function loadGameLogs() {
+  var logs = await apiFetch('/api/game_logs');
+  if (!logs || !Array.isArray(logs)) {
+    state.gameLogs = [];
+  } else {
+    state.gameLogs = logs;
+  }
+  renderLogs();
+}
+
+async function loadStrategyConfig() {
+  var params = await apiFetch('/api/strategy_config');
+  strategyBox.textContent = '';
+  if (!params || !params.length) {
+    strategyBox.textContent = 'No config (using defaults)';
+    return;
+  }
+  var table = document.createElement('table');
+  table.style.cssText = 'width:100%;border-collapse:collapse;font-size:11px';
+  params.forEach(function(p) {
+    var tr = document.createElement('tr');
+    var td1 = document.createElement('td');
+    td1.style.cssText = 'padding:2px 6px;color:#00d4aa';
+    td1.textContent = p.name;
+    var td2 = document.createElement('td');
+    td2.style.cssText = 'padding:2px 6px;text-align:right;color:#e0e0e0';
+    td2.textContent = p.value;
+    tr.appendChild(td1);
+    tr.appendChild(td2);
+    table.appendChild(tr);
+  });
+  strategyBox.appendChild(table);
+}
+
+function renderLogs() {
+  logsBox.textContent = '';
+  if (!state.gameLogs || !state.gameLogs.length) {
+    logsBox.textContent = 'No logs';
+    return;
+  }
+  // Show latest first, max 50
+  var items = state.gameLogs.slice(-50).reverse();
+  items.forEach(function(entry) {
+    var div = document.createElement('div');
+    div.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+    div.style.padding = '2px 0';
+    var timeSpan = document.createElement('span');
+    timeSpan.style.color = '#666';
+    timeSpan.textContent = (entry.time || '').substring(11, 19) + ' ';
+    var msgSpan = document.createElement('span');
+    msgSpan.textContent = entry.message || '';
+    div.appendChild(timeSpan);
+    div.appendChild(msgSpan);
+    logsBox.appendChild(div);
+  });
+}
+
+// ── AUTO-REFRESH ───────────────────────────────────────────────
+function setupAutoRefresh() {
+  if (state.refreshInterval) {
+    clearInterval(state.refreshInterval);
+    state.refreshInterval = null;
+  }
+  state.refreshInterval = setInterval(async function() {
+    if (!state.isLatest) return;
+    setStatus('refreshing...');
+
+    // Check if new round appeared
+    var rounds = await apiFetch('/api/rounds');
+    if (rounds && rounds.length) {
+      var latestRound = rounds[rounds.length - 1];
+      // Reset userSelectedRound if user is already on the latest round.
+      if (latestRound.id === state.currentRoundId) {
+        state.userSelectedRound = false;
+      }
+      if (latestRound.id !== state.currentRoundId && !state.userSelectedRound) {
+        state.currentRoundId = latestRound.id;
+        roundSelect.textContent = '';
+        rounds.forEach(function(r) {
+          var opt = document.createElement('option');
+          opt.value = r.id;
+          opt.textContent = '#' + r.roundNum + ' (' + r.totalTurns + ' turns)';
+          roundSelect.appendChild(opt);
+        });
+        roundSelect.value = String(state.currentRoundId);
+        state.rounds = rounds;
+        await loadMountains();
+      }
+    }
+
+    await loadTurns();
+    var maxT = parseInt(turnSlider.max, 10);
+    if (maxT > 0 && state.isLatest) {
+      state.currentTurnNo = maxT;
+      turnSlider.value = maxT;
+      turnNumDisplay.textContent = maxT;
+    }
+    await Promise.all([loadScores(), loadRoundStats()]);
+    await loadTurnData();
+    setStatus('updated ' + new Date().toLocaleTimeString());
+  }, 1000);
+}
+
+// ── STATS RENDER ───────────────────────────────────────────────
+function renderStats() {
+  statsGrid.textContent = '';
+  if (!state.turnData) {
+    statsGrid.appendChild(createStatCard('—', 'No data'));
+    return;
+  }
+  var td = state.turnData;
+  var acc = state.accumulated;
+  var plantCount = (td.plantations || []).length;
+  var enemyCount = (td.enemies || []).length;
+  var beavCount  = (td.beavers || []).length;
+  var accEnemies = (acc && acc.enemies) ? acc.enemies.length : 0;
+  var accBeavers = (acc && acc.beavers) ? acc.beavers.length : 0;
+  var accCells   = (acc && acc.cells) ? acc.cells.length : 0;
+
+  // total score up to this turn
+  var scoreUpToNow = 0;
+  if (state.scores && state.scores.length) {
+    state.scores.forEach(function(s) {
+      if (s.turnNo <= state.currentTurnNo) scoreUpToNow += s.scoreDelta;
+    });
+  }
+
+  statsGrid.appendChild(createStatCard(state.currentTurnNo, 'Turn', '#e0e0e0'));
+  statsGrid.appendChild(createStatCard(scoreUpToNow.toLocaleString(), 'Score (est.)', '#00d4aa'));
+  statsGrid.appendChild(createStatCard(plantCount, 'Plants', '#00d4aa'));
+  statsGrid.appendChild(createStatCard(enemyCount + (accEnemies > enemyCount ? ' (' + accEnemies + ')' : ''), 'Enemies (seen)', '#e94560'));
+  statsGrid.appendChild(createStatCard(beavCount + (accBeavers > beavCount ? ' (' + accBeavers + ')' : ''), 'Beavers (seen)', '#f0a500'));
+  statsGrid.appendChild(createStatCard(accCells, 'Cells known', '#00a866'));
+
+  // Upgrades from turnData (no extra API call).
+  if (td.upgrades && td.upgrades.length) {
+    var upDiv = document.createElement('div');
+    upDiv.style.cssText = 'grid-column:1/-1;font-size:10px;color:#888;margin-top:4px;display:flex;flex-wrap:wrap;gap:4px';
+    td.upgrades.forEach(function(u) {
+      if (u.current === 0) return;
+      var tag = document.createElement('span');
+      tag.style.cssText = 'background:#0f3460;padding:1px 5px;border-radius:3px;color:#00d4aa';
+      var shortName = u.name.replace('_mitigation','Mit').replace('_power','Pow').replace('_range','Rng').replace('_limit','Lim').replace('_damage','Dmg').replace('beaver_','bvr').replace('earthquake_','eq').replace('settlement_','set').replace('repair_','rep').replace('vision_','vis').replace('decay_','dec').replace('signal_','sig').replace('max_','');
+      tag.textContent = shortName + ':' + u.current + '/' + u.max;
+      upDiv.appendChild(tag);
+    });
+    statsGrid.appendChild(upDiv);
+  }
+}
+
+function renderSummary() {
+  summaryGrid.textContent = '';
+  if (!state.roundStats) {
+    summaryGrid.appendChild(createStatCard('—', 'No data'));
+    return;
+  }
+  var s = state.roundStats;
+  summaryGrid.appendChild(createStatCard((s.totalScore || 0).toLocaleString(), 'Total Score', '#00d4aa'));
+  summaryGrid.appendChild(createStatCard(s.totalTurns || 0, 'Turns'));
+  summaryGrid.appendChild(createStatCard(s.maxPlantations || 0, 'Max Plants', '#00d4aa'));
+  summaryGrid.appendChild(createStatCard(s.totalEnemiesSeen || 0, 'Enemies', '#e94560'));
+  summaryGrid.appendChild(createStatCard(s.totalBeaversSeen || 0, 'Beavers', '#f0a500'));
+  summaryGrid.appendChild(createStatCard(s.stormTurns || 0, 'Storm Turns', '#4488ff'));
+  summaryGrid.appendChild(createStatCard(s.earthquakes || 0, 'Quakes', '#cc44ff'));
+  // fill to 8
+}
+
+// ── CHART ──────────────────────────────────────────────────────
+function drawChart() {
+  var W = chartCanvas.offsetWidth || 600;
+  var H = chartCanvas.height;
+  chartCanvas.width = W;
+  chartCtx.clearRect(0, 0, W, H);
+
+  if (!state.scores || !state.scores.length) {
+    chartCtx.fillStyle = '#888';
+    chartCtx.font = '12px monospace';
+    chartCtx.fillText('No score data', 10, H / 2);
+    return;
+  }
+
+  var PAD = { top: 6, bot: 18, left: 42, right: 6 };
+  var cW = W - PAD.left - PAD.right;
+  var cH = H - PAD.top - PAD.bot;
+
+  var maxScore = Math.max.apply(null, state.scores.map(function(s) { return s.scoreDelta || 0; })) || 1;
+  var minScore = Math.min.apply(null, state.scores.map(function(s) { return s.scoreDelta || 0; }));
+  var range = maxScore - Math.min(0, minScore) || 1;
+  var zeroY = PAD.top + cH * (maxScore / range);
+
+  // grid lines
+  chartCtx.strokeStyle = 'rgba(15,52,96,0.8)';
+  chartCtx.lineWidth = 1;
+  for (var i = 0; i <= 4; i++) {
+    var gy = PAD.top + (cH / 4) * i;
+    chartCtx.beginPath();
+    chartCtx.moveTo(PAD.left, gy);
+    chartCtx.lineTo(PAD.left + cW, gy);
+    chartCtx.stroke();
+    var gVal = Math.round(maxScore - (range / 4) * i);
+    chartCtx.fillStyle = '#555';
+    chartCtx.font = '9px monospace';
+    chartCtx.textAlign = 'right';
+    chartCtx.fillText(gVal >= 1000 ? (gVal/1000).toFixed(1)+'k' : gVal, PAD.left - 2, gy + 3);
+  }
+  chartCtx.textAlign = 'left';
+
+  // bars
+  var barW = Math.max(1, cW / state.scores.length);
+  state.scores.forEach(function(s, i) {
+    var val = s.scoreDelta || 0;
+    var barH = Math.abs(val / range * cH);
+    var x = PAD.left + i * barW;
+    var y = val >= 0 ? zeroY - barH : zeroY;
+    // highlight current turn
+    if (s.turnNo === state.currentTurnNo) {
+      chartCtx.fillStyle = '#f0a500';
+    } else if (val < 0) {
+      chartCtx.fillStyle = '#e94560';
+    } else {
+      chartCtx.fillStyle = '#00d4aa';
+    }
+    chartCtx.fillRect(x, y, Math.max(barW - 1, 1), barH);
+  });
+
+  // zero line
+  chartCtx.strokeStyle = 'rgba(255,255,255,0.15)';
+  chartCtx.lineWidth = 1;
+  chartCtx.beginPath();
+  chartCtx.moveTo(PAD.left, zeroY);
+  chartCtx.lineTo(PAD.left + cW, zeroY);
+  chartCtx.stroke();
+
+  // axis labels
+  chartCtx.fillStyle = '#555';
+  chartCtx.font = '9px monospace';
+  chartCtx.textAlign = 'left';
+  if (state.scores.length) {
+    chartCtx.fillText('turn ' + state.scores[0].turnNo, PAD.left, H - 4);
+    var last = state.scores[state.scores.length - 1];
+    chartCtx.textAlign = 'right';
+    chartCtx.fillText(last.turnNo, W - PAD.right, H - 4);
+  }
+  chartCtx.textAlign = 'left';
+}
+
+// ── MAP ────────────────────────────────────────────────────────
+function resizeCanvas() {
+  mapCanvas.width  = mapWrap.clientWidth;
+  mapCanvas.height = mapWrap.clientHeight;
+  drawMap();
+}
+
+function worldToCanvas(wx, wy) {
+  return {
+    x: state.mapOffsetX + wx * state.mapScale,
+    y: state.mapOffsetY + wy * state.mapScale
+  };
+}
+
+// Center of a cell (for drawing objects like plantations, beavers, enemies)
+function cellCenter(cx, cy) {
+  return worldToCanvas(cx + 0.5, cy + 0.5);
+}
+
+function canvasToWorld(cx, cy) {
+  return {
+    x: (cx - state.mapOffsetX) / state.mapScale,
+    y: (cy - state.mapOffsetY) / state.mapScale
+  };
+}
+
+function fitMap() {
+  if (!state.turnData) return;
+  var mw = state.turnData.mapWidth  || 800;
+  var mh = state.turnData.mapHeight || 600;
+  var cw = mapCanvas.width;
+  var ch = mapCanvas.height;
+  var scaleX = cw / mw;
+  var scaleY = ch / mh;
+  state.mapScale = Math.min(scaleX, scaleY) * 0.95;
+  state.mapOffsetX = (cw - mw * state.mapScale) / 2;
+  state.mapOffsetY = (ch - mh * state.mapScale) / 2;
+}
+
+function drawMap() {
+  var W = mapCanvas.width;
+  var H = mapCanvas.height;
+  if (!W || !H) return;
+
+  mapCtx.clearRect(0, 0, W, H);
+
+  // background
+  mapCtx.fillStyle = '#0a0a1a';
+  mapCtx.fillRect(0, 0, W, H);
+
+  if (!state.turnData) {
+    mapCtx.fillStyle = '#555';
+    mapCtx.font = '14px monospace';
+    mapCtx.textAlign = 'center';
+    mapCtx.fillText('No turn data', W / 2, H / 2);
+    mapCtx.textAlign = 'left';
+    return;
+  }
+
+  var td = state.turnData;
+  var mw = td.mapWidth  || 800;
+  var mh = td.mapHeight || 600;
+  var sc = state.mapScale;
+  var ox = state.mapOffsetX;
+  var oy = state.mapOffsetY;
+
+  // clip to map bounds
+  mapCtx.save();
+  mapCtx.beginPath();
+  mapCtx.rect(ox, oy, mw * sc, mh * sc);
+  mapCtx.clip();
+
+  // map background
+  mapCtx.fillStyle = '#0d0d20';
+  mapCtx.fillRect(ox, oy, mw * sc, mh * sc);
+
+  // ---- coordinate grid ----
+  var gridStep = 10; // every 10 cells at low zoom
+  if (sc > 3) gridStep = 5;
+  if (sc > 8) gridStep = 1;
+  if (sc < 1) gridStep = 50;
+  if (sc < 0.5) gridStep = 100;
+
+  // visible world bounds
+  var vx0 = Math.max(0, Math.floor(-ox / sc));
+  var vy0 = Math.max(0, Math.floor(-oy / sc));
+  var vx1 = Math.min(mw, Math.ceil((W - ox) / sc));
+  var vy1 = Math.min(mh, Math.ceil((H - oy) / sc));
+
+  // grid lines
+  mapCtx.strokeStyle = 'rgba(50,80,120,0.3)';
+  mapCtx.lineWidth = 0.5;
+  for (var gx = Math.floor(vx0 / gridStep) * gridStep; gx <= vx1; gx += gridStep) {
+    var gxp = worldToCanvas(gx, 0);
+    mapCtx.beginPath();
+    mapCtx.moveTo(gxp.x, oy);
+    mapCtx.lineTo(gxp.x, oy + mh * sc);
+    mapCtx.stroke();
+  }
+  for (var gy = Math.floor(vy0 / gridStep) * gridStep; gy <= vy1; gy += gridStep) {
+    var gyp = worldToCanvas(0, gy);
+    mapCtx.beginPath();
+    mapCtx.moveTo(ox, gyp.y);
+    mapCtx.lineTo(ox + mw * sc, gyp.y);
+    mapCtx.stroke();
+  }
+
+  // coordinate labels (every 5x gridStep)
+  var labelStep = gridStep * 5;
+  if (labelStep < 10) labelStep = 10;
+  if (sc > 5) labelStep = gridStep;
+  mapCtx.fillStyle = 'rgba(100,140,180,0.5)';
+  mapCtx.font = '9px monospace';
+  for (var lx = Math.floor(vx0 / labelStep) * labelStep; lx <= vx1; lx += labelStep) {
+    var lxp = worldToCanvas(lx, vy0);
+    mapCtx.fillText(lx, lxp.x + 2, lxp.y + 10);
+  }
+  for (var ly = Math.floor(vy0 / labelStep) * labelStep; ly <= vy1; ly += labelStep) {
+    var lyp = worldToCanvas(vx0, ly);
+    mapCtx.fillText(ly, lyp.x + 2, lyp.y - 2);
+  }
+
+  // ---- boosted cells (x%7==0 && y%7==0) - small dot markers ----
+  var dotSize = Math.max(1, Math.min(sc * 0.15, 3));
+  if (sc > 0.5) {
+    mapCtx.fillStyle = 'rgba(240,165,0,0.4)';
+    for (var bx = Math.floor(vx0 / 7) * 7; bx <= vx1; bx += 7) {
+      for (var by = Math.floor(vy0 / 7) * 7; by <= vy1; by += 7) {
+        var bp = cellCenter(bx, by);
+        mapCtx.beginPath();
+        mapCtx.arc(bp.x, bp.y, dotSize, 0, Math.PI * 2);
+        mapCtx.fill();
+      }
+    }
+  }
+
+  // vision range hidden per user request
+
+  // ---- accumulated cells (historical, dimmed 🌿) ----
+  var acc = state.accumulated;
+  if (acc && acc.cells && acc.cells.length) {
+    acc.cells.forEach(function(c) {
+      var cp = worldToCanvas(c.x, c.y);
+      var alpha = 0.1 + (c.progress || 0) / 100 * 0.3;
+      mapCtx.fillStyle = 'rgba(0,180,100,' + alpha + ')';
+      mapCtx.fillRect(cp.x, cp.y, Math.max(sc, 1), Math.max(sc, 1));
+      if (sc > 6) {
+        mapCtx.globalAlpha = 0.25;
+        mapCtx.font = Math.max(sc * 0.5, 4) + 'px serif';
+        mapCtx.textAlign = 'center';
+        mapCtx.textBaseline = 'middle';
+        mapCtx.fillText('\uD83C\uDF3F', cp.x + sc/2, cp.y + sc/2);
+        mapCtx.globalAlpha = 1;
+        mapCtx.textBaseline = 'alphabetic';
+        mapCtx.textAlign = 'left';
+      }
+    });
+  }
+
+  // ---- current turn terraformed cells (🌿 bright) ----
+  if (td.cells && td.cells.length) {
+    var emojiSize = Math.max(sc * 0.8, 6);
+    td.cells.forEach(function(c) {
+      var cp = cellCenter(c.x, c.y);
+      // Green background tint
+      var alpha = 0.15 + (c.progress || 0) / 100 * 0.4;
+      mapCtx.fillStyle = 'rgba(0,220,130,' + alpha + ')';
+      mapCtx.fillRect(cp.x - sc/2, cp.y - sc/2, sc, sc);
+      // Emoji + progress always visible at reasonable zoom
+      if (sc > 3) {
+        mapCtx.font = emojiSize + 'px serif';
+        mapCtx.textAlign = 'center';
+        mapCtx.textBaseline = 'middle';
+        mapCtx.fillText('\uD83C\uDF3F', cp.x, cp.y - sc * 0.1); // 🌿
+        // Progress %
+        mapCtx.fillStyle = '#fff';
+        mapCtx.font = 'bold ' + Math.max(8, sc * 0.28) + 'px monospace';
+        mapCtx.fillText((c.progress || 0) + '%', cp.x, cp.y + sc * 0.35);
+        mapCtx.textBaseline = 'alphabetic';
+        mapCtx.textAlign = 'left';
+      }
+    });
+  }
+
+  // ---- mountains (⛰️) — prefer turnData.mountains, fallback to state.mountains ----
+  var mtList = (td.mountains && td.mountains.length) ? td.mountains : (state.mountains || []);
+  if (mtList.length) {
+    var mtSize = Math.max(sc * 0.85, 6);
+    mtList.forEach(function(m) {
+      var mp = cellCenter(m.x, m.y);
+      mapCtx.fillStyle = '#3a3a4a';
+      mapCtx.fillRect(mp.x - sc/2, mp.y - sc/2, sc, sc);
+      if (sc > 3) {
+        mapCtx.font = mtSize + 'px serif';
+        mapCtx.textAlign = 'center';
+        mapCtx.textBaseline = 'middle';
+        mapCtx.fillText('\u26F0\uFE0F', mp.x, mp.y); // ⛰️
+        mapCtx.textBaseline = 'alphabetic';
+        mapCtx.textAlign = 'left';
+      }
+    });
+  }
+
+  // ---- constructions (🔨) ----
+  if (td.constructions && td.constructions.length) {
+    var hammerSize = Math.max(sc * 0.7, 6);
+    td.constructions.forEach(function(c) {
+      var cp = cellCenter(c.x, c.y);
+      var prog = (c.progress || 0) / 50;
+      // Progress background
+      mapCtx.fillStyle = 'rgba(240,165,0,0.2)';
+      mapCtx.fillRect(cp.x - sc/2, cp.y - sc/2, sc, sc);
+      mapCtx.fillStyle = 'rgba(240,165,0,0.5)';
+      mapCtx.fillRect(cp.x - sc/2, cp.y + sc/2 - sc * prog, sc, sc * prog);
+      mapCtx.strokeStyle = '#f0a500';
+      mapCtx.lineWidth = 0.5;
+      mapCtx.strokeRect(cp.x - sc/2, cp.y - sc/2, sc, sc);
+      if (sc > 3) {
+        mapCtx.font = hammerSize + 'px serif';
+        mapCtx.textAlign = 'center';
+        mapCtx.textBaseline = 'middle';
+        mapCtx.fillText('\uD83D\uDD28', cp.x, cp.y - sc * 0.1); // 🔨
+        // Progress text always visible
+        mapCtx.fillStyle = '#fff';
+        mapCtx.font = 'bold ' + Math.max(8, sc * 0.25) + 'px monospace';
+        mapCtx.fillText((c.progress || 0) + '/50', cp.x, cp.y + sc * 0.35);
+        mapCtx.textBaseline = 'alphabetic';
+        mapCtx.textAlign = 'left';
+      }
+    });
+  }
+
+  // ---- sandstorms ----
+  if (td.meteo && td.meteo.length) {
+    td.meteo.forEach(function(m) {
+      if (m.kind !== 'sandstorm') return;
+      var sp = worldToCanvas(m.posX, m.posY);
+      var r = (m.radius || 12) * sc;
+      mapCtx.beginPath();
+      mapCtx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+      if (m.forming) {
+        mapCtx.setLineDash([4, 4]);
+        mapCtx.strokeStyle = 'rgba(68,136,255,0.7)';
+        mapCtx.lineWidth = 1.5;
+        mapCtx.stroke();
+        mapCtx.setLineDash([]);
+      } else {
+        mapCtx.fillStyle = 'rgba(68,136,255,0.12)';
+        mapCtx.fill();
+        mapCtx.strokeStyle = 'rgba(68,136,255,0.5)';
+        mapCtx.lineWidth = 1.5;
+        mapCtx.stroke();
+      }
+      // next position arrow
+      if (m.nextPosX !== undefined && m.nextPosY !== undefined) {
+        var np = worldToCanvas(m.nextPosX, m.nextPosY);
+        mapCtx.strokeStyle = 'rgba(68,136,255,0.4)';
+        mapCtx.lineWidth = 1;
+        mapCtx.setLineDash([3, 3]);
+        mapCtx.beginPath();
+        mapCtx.moveTo(sp.x, sp.y);
+        mapCtx.lineTo(np.x, np.y);
+        mapCtx.stroke();
+        mapCtx.setLineDash([]);
+      }
+    });
+  }
+
+  // ---- plantations (🏠 CU / 🌱 regular) ----
+  if (td.plantations && td.plantations.length) {
+    var plantSize = Math.max(sc * 0.85, 6);
+    td.plantations.forEach(function(p) {
+      var pp = cellCenter(p.x, p.y);
+      var hpPct = (p.hp || 0) / 50;
+
+      // Background tint based on HP.
+      if (hpPct < 0.3) {
+        mapCtx.fillStyle = 'rgba(233,69,96,0.3)';
+      } else if (hpPct < 0.6) {
+        mapCtx.fillStyle = 'rgba(240,165,0,0.2)';
+      } else {
+        mapCtx.fillStyle = 'rgba(0,200,100,0.2)';
+      }
+      mapCtx.fillRect(pp.x - sc/2, pp.y - sc/2, sc, sc);
+
+      // CU border
+      if (p.isMain) {
+        mapCtx.strokeStyle = hpPct < 0.3 ? '#ff0000' : '#ffffff';
+        mapCtx.lineWidth = 2;
+        mapCtx.strokeRect(pp.x - sc/2, pp.y - sc/2, sc, sc);
+      }
+      if (p.isIsolated) {
+        mapCtx.setLineDash([2, 2]);
+        mapCtx.strokeStyle = '#888';
+        mapCtx.lineWidth = 1;
+        mapCtx.strokeRect(pp.x - sc/2, pp.y - sc/2, sc, sc);
+        mapCtx.setLineDash([]);
+      }
+
+      // Emoji
+      if (sc > 4) {
+        mapCtx.font = plantSize + 'px serif';
+        mapCtx.textAlign = 'center';
+        mapCtx.textBaseline = 'middle';
+        mapCtx.fillText(p.isMain ? '\uD83C\uDFE0' : '\uD83C\uDF31', pp.x, pp.y); // 🏠 or 🌱
+        mapCtx.textBaseline = 'alphabetic';
+        mapCtx.textAlign = 'left';
+      }
+
+      // HP bar + number (visible from sc > 2)
+      if (sc > 2) {
+        var barW = sc * 0.9;
+        var barH = Math.max(3, sc * 0.12);
+        var hpRatio = Math.max(0, Math.min(1, hpPct));
+        // Bar background
+        mapCtx.fillStyle = 'rgba(0,0,0,0.6)';
+        mapCtx.fillRect(pp.x - barW/2, pp.y + sc/2 + 1, barW, barH);
+        // Bar fill
+        mapCtx.fillStyle = hpRatio > 0.5 ? '#00d4aa' : hpRatio > 0.25 ? '#f0a500' : '#e94560';
+        mapCtx.fillRect(pp.x - barW/2, pp.y + sc/2 + 1, barW * hpRatio, barH);
+        // HP number
+        mapCtx.fillStyle = '#fff';
+        mapCtx.font = 'bold ' + Math.max(8, sc * 0.25) + 'px monospace';
+        mapCtx.textAlign = 'center';
+        mapCtx.fillText(p.hp, pp.x, pp.y + sc/2 + barH + Math.max(9, sc * 0.28));
+        mapCtx.textAlign = 'left';
+      }
+    });
+  }
+
+  // ---- accumulated enemies (historical, dimmed red 🌱) ----
+  if (acc && acc.enemies && acc.enemies.length) {
+    mapCtx.globalAlpha = 0.25;
+    var accESize = Math.max(sc * 0.6, 5);
+    acc.enemies.forEach(function(e) {
+      var ep = cellCenter(e.x, e.y);
+      mapCtx.fillStyle = 'rgba(233,69,96,0.3)';
+      mapCtx.fillRect(ep.x - sc/2, ep.y - sc/2, sc, sc);
+      if (sc > 3) {
+        mapCtx.font = accESize + 'px serif';
+        mapCtx.textAlign = 'center';
+        mapCtx.textBaseline = 'middle';
+        mapCtx.fillText('\uD83C\uDF31', ep.x, ep.y); // 🌱
+      }
+    });
+    mapCtx.globalAlpha = 1;
+    mapCtx.textBaseline = 'alphabetic';
+    mapCtx.textAlign = 'left';
+  }
+
+  // ---- accumulated beavers (historical, dimmed 🦫) ----
+  if (acc && acc.beavers && acc.beavers.length) {
+    mapCtx.globalAlpha = 0.3;
+    var accBSize = Math.max(sc * 0.6, 5);
+    acc.beavers.forEach(function(b) {
+      var bp = cellCenter(b.x, b.y);
+      if (sc > 3) {
+        mapCtx.font = accBSize + 'px serif';
+        mapCtx.textAlign = 'center';
+        mapCtx.textBaseline = 'middle';
+        mapCtx.fillText('\uD83E\uDDAB', bp.x, bp.y); // 🦫
+      } else {
+        mapCtx.fillStyle = 'rgba(240,165,0,0.4)';
+        mapCtx.fillRect(bp.x - 2, bp.y - 2, 4, 4);
+      }
+    });
+    mapCtx.globalAlpha = 1;
+    mapCtx.textBaseline = 'alphabetic';
+    mapCtx.textAlign = 'left';
+  }
+
+  // ---- enemy plantations (red 🌱 with red border) ----
+  if (td.enemies && td.enemies.length) {
+    var enemySize = Math.max(sc * 0.85, 6);
+    td.enemies.forEach(function(e) {
+      var ep = cellCenter(e.x, e.y);
+      // Red background
+      mapCtx.fillStyle = 'rgba(233,69,96,0.25)';
+      mapCtx.fillRect(ep.x - sc/2, ep.y - sc/2, sc, sc);
+      // Red border
+      mapCtx.strokeStyle = '#e94560';
+      mapCtx.lineWidth = 2;
+      mapCtx.strokeRect(ep.x - sc/2, ep.y - sc/2, sc, sc);
+      // Red seedling emoji
+      if (sc > 4) {
+        mapCtx.font = enemySize + 'px serif';
+        mapCtx.textAlign = 'center';
+        mapCtx.textBaseline = 'middle';
+        mapCtx.fillText('\uD83C\uDF31', ep.x, ep.y); // 🌱
+        // Red X overlay to distinguish from ours
+        mapCtx.strokeStyle = 'rgba(233,69,96,0.7)';
+        mapCtx.lineWidth = 2;
+        var h = sc * 0.35;
+        mapCtx.beginPath();
+        mapCtx.moveTo(ep.x - h, ep.y - h);
+        mapCtx.lineTo(ep.x + h, ep.y + h);
+        mapCtx.moveTo(ep.x + h, ep.y - h);
+        mapCtx.lineTo(ep.x - h, ep.y + h);
+        mapCtx.stroke();
+        mapCtx.textBaseline = 'alphabetic';
+        mapCtx.textAlign = 'left';
+      }
+      // HP bar + number
+      if (sc > 2 && e.hp !== undefined) {
+        var barW2 = sc * 0.9;
+        var barH2 = Math.max(3, sc * 0.12);
+        var hpR2 = Math.max(0, Math.min(1, e.hp / 50));
+        mapCtx.fillStyle = 'rgba(0,0,0,0.6)';
+        mapCtx.fillRect(ep.x - barW2/2, ep.y + sc/2 + 1, barW2, barH2);
+        mapCtx.fillStyle = '#e94560';
+        mapCtx.fillRect(ep.x - barW2/2, ep.y + sc/2 + 1, barW2 * hpR2, barH2);
+        mapCtx.fillStyle = '#ff8888';
+        mapCtx.font = 'bold ' + Math.max(8, sc * 0.25) + 'px monospace';
+        mapCtx.textAlign = 'center';
+        mapCtx.fillText(e.hp, ep.x, ep.y + sc/2 + barH2 + Math.max(9, sc * 0.28));
+        mapCtx.textAlign = 'left';
+      }
+    });
+  }
+
+  // ---- beavers (🦫 drawn LAST) ----
+  if (td.beavers && td.beavers.length) {
+    var beavSize = Math.max(sc * 0.9, 7);
+    td.beavers.forEach(function(b) {
+      var bp = cellCenter(b.x, b.y);
+      mapCtx.fillStyle = 'rgba(240,165,0,0.2)';
+      mapCtx.fillRect(bp.x - sc/2, bp.y - sc/2, sc, sc);
+      mapCtx.strokeStyle = '#f0a500';
+      mapCtx.lineWidth = 1;
+      mapCtx.strokeRect(bp.x - sc/2, bp.y - sc/2, sc, sc);
+      if (sc > 4) {
+        mapCtx.font = beavSize + 'px serif';
+        mapCtx.textAlign = 'center';
+        mapCtx.textBaseline = 'middle';
+        mapCtx.fillText('\uD83E\uDDAB', bp.x, bp.y); // 🦫
+        mapCtx.textBaseline = 'alphabetic';
+        mapCtx.textAlign = 'left';
+      }
+      if (sc > 2) {
+        var barW3 = sc * 0.9;
+        var barH3 = Math.max(3, sc * 0.12);
+        var hpR3 = Math.max(0, Math.min(1, (b.hp || 0) / 100));
+        mapCtx.fillStyle = 'rgba(0,0,0,0.6)';
+        mapCtx.fillRect(bp.x - barW3/2, bp.y + sc/2 + 1, barW3, barH3);
+        mapCtx.fillStyle = '#f0a500';
+        mapCtx.fillRect(bp.x - barW3/2, bp.y + sc/2 + 1, barW3 * hpR3, barH3);
+        // HP number
+        mapCtx.fillStyle = '#ffcc00';
+        mapCtx.font = 'bold ' + Math.max(8, sc * 0.25) + 'px monospace';
+        mapCtx.textAlign = 'center';
+        mapCtx.fillText(b.hp, bp.x, bp.y + sc/2 + barH3 + Math.max(9, sc * 0.28));
+        mapCtx.textAlign = 'left';
+      }
+    });
+
+    // Beaver attack range (AR=2, Chebyshev square)
+    td.beavers.forEach(function(b) {
+      var tl = worldToCanvas(b.x - 2, b.y - 2);
+      var sz = 5 * sc; // 5 cells wide (from -2 to +2)
+      mapCtx.strokeStyle = 'rgba(255,100,0,0.4)';
+      mapCtx.lineWidth = 1;
+      mapCtx.setLineDash([3, 3]);
+      mapCtx.strokeRect(tl.x, tl.y, sz, sz);
+      mapCtx.setLineDash([]);
+    });
+  }
+
+  // ---- combined vision range outline ----
+  if (td.plantations && td.plantations.length && sc > 0.5) {
+    var vrLevel = 0;
+    if (td.upgrades) {
+      td.upgrades.forEach(function(u) { if (u.name === 'vision_range') vrLevel = u.current; });
+    }
+    var vr = 3 + vrLevel * 2;
+    // Build set of visible cells, then draw only edge cells.
+    var visible = {};
+    td.plantations.forEach(function(p) {
+      for (var dx = -vr; dx <= vr; dx++) {
+        for (var dy = -vr; dy <= vr; dy++) {
+          visible[(p.x+dx) + ',' + (p.y+dy)] = true;
+        }
+      }
+    });
+    // Draw border: a visible cell with at least one non-visible neighbor.
+    mapCtx.fillStyle = 'rgba(0,212,170,0.12)';
+    for (var key in visible) {
+      var parts = key.split(',');
+      var cx = parseInt(parts[0]), cy = parseInt(parts[1]);
+      var isEdge = !visible[(cx-1)+','+cy] || !visible[(cx+1)+','+cy] ||
+                   !visible[cx+','+(cy-1)] || !visible[cx+','+(cy+1)];
+      if (isEdge) {
+        var ep = worldToCanvas(cx, cy);
+        mapCtx.fillRect(ep.x, ep.y, Math.max(sc, 1), Math.max(sc, 1));
+      }
+    }
+  }
+
+  mapCtx.restore();
+
+  // ---- action lines (author → target) ----
+  if (td.actions && td.actions.length && sc > 2) {
+    td.actions.forEach(function(a) {
+      var from = cellCenter(a.authorX, a.authorY);
+      var to = cellCenter(a.targetX, a.targetY);
+      var colors = {build:'#f0a500', repair:'#00d4aa', sabotage:'#e94560', beaver:'#ff6600'};
+      var icons = {build:'\uD83D\uDD28', repair:'\u2764\uFE0F', sabotage:'\u2694\uFE0F', beaver:'\uD83E\uDDAB'};
+      var color = colors[a.action] || '#888';
+      // Line from author to target
+      mapCtx.strokeStyle = color;
+      mapCtx.lineWidth = Math.max(1.5, sc * 0.06);
+      mapCtx.setLineDash([3, 3]);
+      mapCtx.beginPath();
+      mapCtx.moveTo(from.x, from.y);
+      mapCtx.lineTo(to.x, to.y);
+      mapCtx.stroke();
+      mapCtx.setLineDash([]);
+      // Arrow head
+      var angle = Math.atan2(to.y - from.y, to.x - from.x);
+      var hs = Math.max(4, sc * 0.2);
+      mapCtx.fillStyle = color;
+      mapCtx.beginPath();
+      mapCtx.moveTo(to.x, to.y);
+      mapCtx.lineTo(to.x - hs * Math.cos(angle - 0.4), to.y - hs * Math.sin(angle - 0.4));
+      mapCtx.lineTo(to.x - hs * Math.cos(angle + 0.4), to.y - hs * Math.sin(angle + 0.4));
+      mapCtx.closePath();
+      mapCtx.fill();
+      // Action icon at midpoint
+      if (sc > 5) {
+        var mx = (from.x + to.x) / 2;
+        var my = (from.y + to.y) / 2;
+        mapCtx.font = Math.max(8, sc * 0.3) + 'px serif';
+        mapCtx.textAlign = 'center';
+        mapCtx.textBaseline = 'middle';
+        mapCtx.fillText(icons[a.action] || '?', mx, my);
+        mapCtx.textBaseline = 'alphabetic';
+        mapCtx.textAlign = 'left';
+      }
+    });
+  }
+
+  // ---- earthquake overlay ----
+  if (td.meteo && td.meteo.length) {
+    td.meteo.forEach(function(m) {
+      if (m.kind !== 'earthquake') return;
+      var tu = m.turnsUntil;
+      if (tu === 0 || tu === null) {
+        // Hitting now — red flash
+        mapCtx.fillStyle = 'rgba(204,68,255,0.15)';
+        mapCtx.fillRect(0, 0, W, H);
+        mapCtx.strokeStyle = 'rgba(255,0,0,0.6)';
+        mapCtx.lineWidth = 4;
+        mapCtx.strokeRect(1, 1, W - 2, H - 2);
+        mapCtx.fillStyle = '#ff4444';
+        mapCtx.font = '18px monospace';
+        mapCtx.textAlign = 'center';
+        mapCtx.fillText('EARTHQUAKE!', W / 2, 30);
+        mapCtx.textAlign = 'left';
+      } else if (tu <= 5) {
+        // Warning
+        var alpha = 0.03 + (5 - tu) * 0.02;
+        mapCtx.fillStyle = 'rgba(204,68,255,' + alpha + ')';
+        mapCtx.fillRect(0, 0, W, H);
+        mapCtx.fillStyle = '#cc44ff';
+        mapCtx.font = '14px monospace';
+        mapCtx.textAlign = 'center';
+        mapCtx.fillText('Earthquake in ' + tu + ' turns', W / 2, 25);
+        mapCtx.textAlign = 'left';
+      }
+    });
+  }
+
+  // ---- map border ----
+  mapCtx.strokeStyle = 'rgba(15,52,96,0.6)';
+  mapCtx.lineWidth = 1;
+  mapCtx.strokeRect(ox, oy, mw * sc, mh * sc);
+}
+
+// ── MAP INTERACTION ────────────────────────────────────────────
+mapCanvas.addEventListener('wheel', function(e) {
+  e.preventDefault();
+  var rect = mapCanvas.getBoundingClientRect();
+  var mx = e.clientX - rect.left;
+  var my = e.clientY - rect.top;
+
+  var zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
+  var newScale = Math.max(0.2, Math.min(50, state.mapScale * zoomFactor));
+
+  // zoom towards mouse position
+  state.mapOffsetX = mx - (mx - state.mapOffsetX) * (newScale / state.mapScale);
+  state.mapOffsetY = my - (my - state.mapOffsetY) * (newScale / state.mapScale);
+  state.mapScale = newScale;
+  drawMap();
+}, { passive: false });
+
+mapCanvas.addEventListener('mousedown', function(e) {
+  state.mapDragging = true;
+  state.mapDragStartX = e.clientX;
+  state.mapDragStartY = e.clientY;
+  state.mapDragStartOX = state.mapOffsetX;
+  state.mapDragStartOY = state.mapOffsetY;
+  mapCanvas.classList.add('dragging');
+});
+
+mapCanvas.addEventListener('mousemove', function(e) {
+  if (state.mapDragging) {
+    followToggle.checked = false; // manual pan disables follow
+    state.mapOffsetX = state.mapDragStartOX + (e.clientX - state.mapDragStartX);
+    state.mapOffsetY = state.mapDragStartOY + (e.clientY - state.mapDragStartY);
+    drawMap();
+    return;
+  }
+
+  // hover detection
+  var rect = mapCanvas.getBoundingClientRect();
+  var cx = e.clientX - rect.left;
+  var cy = e.clientY - rect.top;
+  var hit = hitTest(cx, cy);
+  if (hit) {
+    showTooltip(e.clientX - rect.left + 12, e.clientY - rect.top + 12, hit);
+  } else {
+    mapTooltip.style.display = 'none';
+  }
+});
+
+window.addEventListener('mouseup', function() {
+  state.mapDragging = false;
+  mapCanvas.classList.remove('dragging');
+});
+
+mapCanvas.addEventListener('click', function(e) {
+  var rect = mapCanvas.getBoundingClientRect();
+  var cx = e.clientX - rect.left;
+  var cy = e.clientY - rect.top;
+  var hit = hitTest(cx, cy);
+  state.selectedObj = hit || null;
+  drawMap();
+  renderDetails(hit);
+});
+
+mapCanvas.addEventListener('dblclick', function() {
+  if (state.turnData) fitMap();
+  drawMap();
+});
+
+function hitTest(cx, cy) {
+  if (!state.turnData) return null;
+  var td = state.turnData;
+  var sc = state.mapScale;
+  var threshold = Math.max(sc * 2.5, 8);
+
+  function dist2(ax, ay, bx, by) {
+    return (ax - bx) * (ax - bx) + (ay - by) * (ay - by);
+  }
+
+  // check plantations
+  if (td.plantations) {
+    for (var i = 0; i < td.plantations.length; i++) {
+      var p = td.plantations[i];
+      var pp = cellCenter(p.x, p.y);
+      var r = p.isMain ? Math.min(Math.max(sc * 0.45, 4), sc * 0.5) : Math.min(Math.max(sc * 0.35, 3), sc * 0.4);
+      if (dist2(cx, cy, pp.x, pp.y) <= (r + 4) * (r + 4)) {
+        return { type: 'plantation', obj: p };
+      }
+    }
+  }
+
+  // check enemies
+  if (td.enemies) {
+    for (var j = 0; j < td.enemies.length; j++) {
+      var en = td.enemies[j];
+      var ep = cellCenter(en.x, en.y);
+      var er = Math.max(sc * 1.6, 3);
+      if (dist2(cx, cy, ep.x, ep.y) <= (er + 4) * (er + 4)) {
+        return { type: 'enemy', obj: en };
+      }
+    }
+  }
+
+  // check beavers (diamond - approximate with square)
+  if (td.beavers) {
+    for (var k = 0; k < td.beavers.length; k++) {
+      var bv = td.beavers[k];
+      var bp = cellCenter(bv.x, bv.y);
+      var br = Math.max(sc * 1.6, 3) + 4;
+      if (Math.abs(cx - bp.x) <= br && Math.abs(cy - bp.y) <= br) {
+        return { type: 'beaver', obj: bv };
+      }
+    }
+  }
+
+  // check constructions
+  if (td.constructions) {
+    for (var l = 0; l < td.constructions.length; l++) {
+      var co = td.constructions[l];
+      var cop = cellCenter(co.x, co.y);
+      var cosz = Math.max(sc * 2, 4) + 4;
+      if (Math.abs(cx - cop.x) <= cosz && Math.abs(cy - cop.y) <= cosz) {
+        return { type: 'construction', obj: co };
+      }
+    }
+  }
+
+  return null;
+}
+
+function showTooltip(x, y, hit) {
+  mapTooltip.textContent = '';
+  var lines = formatHitLines(hit);
+  lines.forEach(function(line) {
+    var d = el('div', { textContent: line });
+    mapTooltip.appendChild(d);
+  });
+  // keep within canvas
+  var tw = 180;
+  var tx = x + tw > mapCanvas.width ? x - tw - 12 : x;
+  mapTooltip.style.left = tx + 'px';
+  mapTooltip.style.top  = y + 'px';
+  mapTooltip.style.display = 'block';
+}
+
+function formatHitLines(hit) {
+  if (!hit) return [];
+  var o = hit.obj;
+  switch (hit.type) {
+    case 'plantation':
+      var pLines = [
+        '[Плантация] ' + o.id,
+        'Позиция: ' + o.x + ', ' + o.y,
+        'HP: ' + (o.hp !== undefined ? o.hp : '?'),
+        'ЦУ: ' + (o.isMain ? 'ДА' : 'нет'),
+        'Изолирована: ' + (o.isIsolated ? 'ДА' : 'нет')
+      ];
+      // Найти action для этой плантации
+      if (state.turnData && state.turnData.actions) {
+        state.turnData.actions.forEach(function(a) {
+          if (a.authorX === o.x && a.authorY === o.y) {
+            pLines.push('Действие: ' + a.action + ' → ' + a.targetX + ',' + a.targetY);
+            if (a.reason) pLines.push('Причина: ' + a.reason);
+          }
+        });
+      }
+      // Прогресс клетки
+      if (state.turnData && state.turnData.cells) {
+        state.turnData.cells.forEach(function(c) {
+          if (c.x === o.x && c.y === o.y) {
+            pLines.push('Терраформация: ' + c.progress + '%');
+          }
+        });
+      }
+      return pLines;
+    case 'enemy':
+      return [
+        '[Enemy] ' + o.id,
+        'Pos: ' + o.x + ', ' + o.y,
+        'HP: ' + (o.hp !== undefined ? o.hp : '?')
+      ];
+    case 'beaver':
+      return [
+        '[Beaver] ' + o.id,
+        'Pos: ' + o.x + ', ' + o.y,
+        'HP: ' + (o.hp !== undefined ? o.hp : '?')
+      ];
+    case 'construction':
+      return [
+        '[Construction]',
+        'Pos: ' + o.x + ', ' + o.y,
+        'Progress: ' + (o.progress || 0) + '%'
+      ];
+    default:
+      return [];
+  }
+}
+
+function renderDetails(hit) {
+  detailBox.textContent = '';
+  if (!hit) {
+    var noSel = el('div', { textContent: 'Click a map object to see details', style: { color: '#555' } });
+    detailBox.appendChild(noSel);
+    return;
+  }
+  var lines = formatHitLines(hit);
+  lines.forEach(function(line) {
+    var row = el('div', { className: 'det-row' });
+    var idx = line.indexOf(':');
+    if (idx !== -1) {
+      var key = el('span', { className: 'det-key', textContent: line.slice(0, idx + 1) });
+      var val = el('span', { className: 'det-val', textContent: line.slice(idx + 1).trim() });
+      row.appendChild(key);
+      row.appendChild(val);
+    } else {
+      var full = el('span', { style: { color: '#00d4aa', fontWeight: 'bold' }, textContent: line });
+      row.appendChild(full);
+    }
+    detailBox.appendChild(row);
+  });
+}
+
+// ── RESIZE ────────────────────────────────────────────────────
+var resizeTimer = null;
+window.addEventListener('resize', function() {
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(function() {
+    resizeCanvas();
+    drawChart();
+  }, 100);
+});
+
+// ── INIT ──────────────────────────────────────────────────────
+async function init() {
+  resizeCanvas();
+  setStatus('loading...');
+
+  await loadRounds();
+
+  if (state.rounds.length === 0) {
+    setStatus('No rounds available');
+    return;
+  }
+
+  await loadRoundData();
+
+  if (state.turnData) {
+    fitMap();
+    drawMap();
+  }
+
+  setStatus('updated ' + new Date().toLocaleTimeString());
+
+  var noSelDiv = el('div', { textContent: 'Click a map object to see details', style: { color: '#555' } });
+  detailBox.appendChild(noSelDiv);
+}
+
+init();
+
+})();
+</script>
+</body>
+</html>

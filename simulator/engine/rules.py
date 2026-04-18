@@ -138,6 +138,11 @@ def _resolve_build(s: EngineState, cmds: CommandSet) -> None:
         con.contributors_last_turn[author_id] = (
             con.contributors_last_turn.get(author_id, 0) + cs_eff
         )
+        from simulator.engine.events import ConstructionProgressed
+        if cs_eff > 0:
+            s.events_this_turn.append(
+                ConstructionProgressed(position=target, amount=cs_eff)
+            )
 
     # Finish constructions that reached 50
     done_positions = [pos for pos, c in s.constructions.items() if c.progress >= 50]

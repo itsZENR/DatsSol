@@ -47,7 +47,14 @@ class UpgradeBought:
     new_level: int
 
 
+@dataclass(frozen=True)
+class ConstructionProgressed:
+    position: Pos
+    amount: int
+
+
 Event = Union[
     Scored, PlantationDestroyed, BeaverKilled, HQLost,
     ConstructionCompleted, CellTerraformed, UpgradeBought,
+    ConstructionProgressed,
 ]

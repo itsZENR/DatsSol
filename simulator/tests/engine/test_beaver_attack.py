@@ -20,8 +20,7 @@ def test_beaver_attack_reduces_hp_by_be():
     s, cfg = _mk(beaver_hp=100)
     cmd = Command(author=(5, 5), relay=(5, 5), target=(5, 6))
     s2 = tick(s, CommandSet(commands=[cmd]))
-    # TODO: after Task 16 (_resolve_beaver_damage with regen), change to 100 - cfg.be + cfg.beaver_regen
-    assert s2.beavers["b1"].hp == 100 - cfg.be
+    assert s2.beavers["b1"].hp == 100 - cfg.be + cfg.beaver_regen
 
 
 def test_beaver_kill_awards_20x():

@@ -251,7 +251,23 @@ def _resolve_relocate(s: EngineState, cmds: CommandSet) -> None:
     s.plantations[src_id].is_main = False
     s.plantations[dst_id].is_main = True
     s.hq_id = dst_id
-def _resolve_beaver_damage(s: EngineState) -> None: ...
+def _resolve_beaver_damage(s: EngineState) -> None:
+    from simulator.engine.spatial import in_square_range
+
+    dmg = s.effective_beaver_damage()
+    ar = s.config.beaver_attack_radius
+    for b in s.beavers.values():
+        for p in s.plantations.values():
+            if in_square_range(b.position, p.position, ar):
+                if p.immunity_until_turn > s.turn_no:
+                    continue
+                p.hp -= dmg
+        for pos, c in list(s.constructions.items()):
+            if in_square_range(b.position, pos, ar):
+                c.progress = max(0, c.progress - dmg)
+    # Regeneration
+    for b in s.beavers.values():
+        b.hp = min(s.config.beaver_max_hp, b.hp + s.config.beaver_regen)
 def _resolve_degradation(s: EngineState) -> None: ...
 def _resolve_meteo(s: EngineState) -> None: ...
 def _resolve_terraform_and_score(s: EngineState) -> None: ...

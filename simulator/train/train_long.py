@@ -88,9 +88,9 @@ def main():
             return FlattenActionEnv(base)
         return _make
 
-    # SubprocVecEnv works on Windows too (requires __name__ == "__main__" guard, which we have)
-    vec_cls = SubprocVecEnv if args.n_envs > 1 else DummyVecEnv
-    vec = vec_cls([env_factory(i) for i in range(args.n_envs)])
+    # DummyVecEnv (single-process) — SubprocVecEnv on Windows exhausts RAM
+    # due to PyTorch/CUDA being loaded per subprocess.
+    vec = DummyVecEnv([env_factory(i) for i in range(args.n_envs)])
 
     ckpt_dir = args.out.parent / f"{args.out.name}_ckpts"
     ckpt_dir.mkdir(exist_ok=True, parents=True)

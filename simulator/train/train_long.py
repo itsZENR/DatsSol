@@ -38,6 +38,7 @@ class EvalAndLogCallback(BaseCallback):
             seed=99,
             map_size=tuple(self.stage_cfg["map_size"]),
             round_turns=self.stage_cfg["round_turns"],
+            game_config_overrides=self.stage_cfg.get("game_config_overrides", {}),
         )
         env = FlattenActionEnv(base)
         scores = []

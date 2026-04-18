@@ -25,9 +25,9 @@ def tick(state: EngineState, cmds: CommandSet) -> EngineState:
     _resolve_degradation(s)            # 9
     _resolve_meteo(s)                  # 10
     _resolve_terraform_and_score(s)    # 11
-    _resolve_respawn(s)                # 12
-    _spawn_new_meteo(s)                # 13
-    _cleanup_dead(s)                   # 14
+    _cleanup_dead(s)                   # 12
+    _resolve_respawn(s)                # 13
+    _spawn_new_meteo(s)                # 14
     _recompute_connectivity(s)         # 15
 
     s.turn_no += 1
@@ -377,7 +377,95 @@ def _resolve_terraform_and_score(s: EngineState) -> None:
                 continue
             if cell.progress < 100:
                 cell.completed_on_turn = None
-def _resolve_respawn(s: EngineState) -> None: ...
-def _spawn_new_meteo(s: EngineState) -> None: ...
-def _cleanup_dead(s: EngineState) -> None: ...
-def _recompute_connectivity(s: EngineState) -> None: ...
+def _cleanup_dead(s: EngineState) -> None:
+    from simulator.engine.events import PlantationDestroyed
+    to_remove = [pid for pid, p in s.plantations.items() if p.hp <= 0]
+    hq_died = s.hq_id in to_remove
+    for pid in to_remove:
+        p = s.plantations[pid]
+        s.events_this_turn.append(
+            PlantationDestroyed(plantation_id=pid, position=p.position,
+                                was_main=p.is_main)
+        )
+        del s.plantations[pid]
+    if hq_died:
+        s.hq_id = None
+
+
+def _resolve_respawn(s: EngineState) -> None:
+    """If HQ lost — respawn on corner; apply penalty if not already applied."""
+    from simulator.engine.events import HQLost
+    from simulator.engine.entities import Plantation
+
+    if s.hq_id is not None and s.hq_id in s.plantations:
+        return  # HQ alive
+    if s.hq_id is None and not s.plantations:
+        # First spawn or full wipe
+        pid = s.new_plant_id()
+        s.plantations[pid] = Plantation(
+            id=pid, position=(1, 1), is_main=True,
+            hp=s.effective_mhp(),
+            immunity_until_turn=s.turn_no + s.config.immunity_turns + 1,
+            built_on_turn=s.turn_no,
+        )
+        s.hq_id = pid
+        return
+    # HQ died this tick but plantations remain
+    if s.hq_id is None and s.plantations:
+        already_penalized = any(
+            isinstance(e, HQLost) for e in s.events_this_turn
+        )
+        if not already_penalized:
+            penalty = max(1, s.score * 5 // 100)
+            s.score -= penalty
+            s.events_this_turn.append(HQLost(prev_hq_id="unknown", penalty=penalty))
+        # Wipe all owned plantations
+        for pid in list(s.plantations.keys()):
+            if pid not in s.enemy_ids:
+                del s.plantations[pid]
+        # Respawn on (1,1)
+        pid = s.new_plant_id()
+        s.plantations[pid] = Plantation(
+            id=pid, position=(1, 1), is_main=True,
+            hp=s.effective_mhp(),
+            immunity_until_turn=s.turn_no + s.config.immunity_turns + 1,
+            built_on_turn=s.turn_no,
+        )
+        s.hq_id = pid
+
+
+def _spawn_new_meteo(s: EngineState) -> None:
+    from simulator.engine.entities import Storm
+    # Earthquake: schedule if none upcoming
+    if s.earthquake_turn is None:
+        if s.rng.random() < s.config.earthquake_prob:
+            s.earthquake_turn = s.turn_no + 1
+    # Storm: only if none active
+    if not s.storms:
+        if s.rng.random() < s.config.storm_prob:
+            w, h = s.config.map_width, s.config.map_height
+            sx = int(s.rng.integers(0, w))
+            sy = int(s.rng.integers(0, h))
+            speed = int(s.rng.integers(
+                s.config.storm_speed_min, s.config.storm_speed_max + 1
+            ))
+            dx = int(s.rng.choice([-1, 1]))
+            dy = int(s.rng.choice([-1, 1]))
+            s.storms.append(Storm(
+                id=f"storm_{s.turn_no}",
+                position=(sx, sy),
+                radius=30,
+                speed=speed,
+                direction=(dx, dy),
+                forming_left=s.config.storm_forming_turns,
+            ))
+
+
+def _recompute_connectivity(s: EngineState) -> None:
+    from simulator.engine.spatial import bfs_connected
+    own_positions = {
+        pid: p.position
+        for pid, p in s.plantations.items()
+        if pid not in s.enemy_ids
+    }
+    s.connected_ids = bfs_connected(s.hq_id, own_positions)

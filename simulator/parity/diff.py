@@ -22,20 +22,24 @@ def diff_states(a: EngineState, b: EngineState) -> StateDiff:
     if a.score != b.score:
         d.add("score", f"{a.score} vs {b.score}")
 
-    if set(a.plantations.keys()) != set(b.plantations.keys()):
-        d.add("plantation_set",
-              f"{sorted(a.plantations)} vs {sorted(b.plantations)}")
+    # Compare plantations by POSITION, not by ID.
+    # Rationale: dump uses server-generated UUIDs, our engine uses synthetic IDs (p0, p1, ...).
+    # The ID namespace differs by design; position-based comparison avoids spurious divergences.
+    a_pos = {p.position: p for p in a.plantations.values()}
+    b_pos = {p.position: p for p in b.plantations.values()}
 
-    for pid, p in a.plantations.items():
-        if pid not in b.plantations:
+    if set(a_pos.keys()) != set(b_pos.keys()):
+        d.add("plantation_set_by_pos",
+              f"engine {sorted(a_pos.keys())} vs dump {sorted(b_pos.keys())}")
+
+    for pos, p in a_pos.items():
+        if pos not in b_pos:
             continue
-        q = b.plantations[pid]
+        q = b_pos[pos]
         if p.hp != q.hp:
-            d.add("plantation_hp", f"{pid}: {p.hp} vs {q.hp}")
-        if p.position != q.position:
-            d.add("plantation_position", f"{pid}: {p.position} vs {q.position}")
+            d.add("plantation_hp", f"{pos}: {p.hp} vs {q.hp}")
         if p.is_main != q.is_main:
-            d.add("plantation_is_main", f"{pid}: {p.is_main} vs {q.is_main}")
+            d.add("plantation_is_main", f"{pos}: {p.is_main} vs {q.is_main}")
 
     for pos, c in a.constructions.items():
         q = b.constructions.get(pos)

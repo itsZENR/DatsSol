@@ -132,4 +132,15 @@ def load_state_at(dump_dir: Path, round_id: int, turn_no: int) -> EngineState:
                 max=int(r["max_level"]) if r["max_level"] != -1 else 99,
             )
 
+    # Recompute connectivity: dump does not persist connected_ids, so we must
+    # reconstruct it from plantation positions. Without this, all commands would
+    # fail validation and never execute, causing divergence in construction completions.
+    from simulator.engine.spatial import bfs_connected
+    own_positions = {
+        pid: p.position
+        for pid, p in s.plantations.items()
+        if pid not in s.enemy_ids
+    }
+    s.connected_ids = bfs_connected(s.hq_id, own_positions)
+
     return s

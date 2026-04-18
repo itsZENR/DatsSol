@@ -82,10 +82,50 @@ Rounds replayed: 1,2,3,4,5,6,7,8,9,10 = 4317 turn boundaries total.
 
 - **Next step**: Add debug logging to compare planted positions at first turn boundary (round 1, turn 2) between engine and dump. Narrow down whether the gap is in loader or in tick logic.
 
+## Root cause analysis: plantation_set divergence (2026-04-18, commit fd3474a)
+
+### Finding 1: ID namespace mismatch (resolved)
+
+**Issue:** The engine generates synthetic plantation IDs (`p0`, `p1`, ...) via `EngineState.new_plant_id()`, while the dump contains server-generated UUIDs (e.g., `07b808e6-2150-4cd7-b8c7-cb9fc182056e`). This caused **all** ID-based comparisons to diverge by design, even when plantation state was identical.
+
+**Root cause:** `diff.py` was comparing plantations by ID using `set(a.plantations.keys()) != set(b.plantations.keys())`, which is inherently incompatible with heterogeneous ID namespaces.
+
+**Fix (v0.1):** Changed comparison from ID-keyed to **position-keyed**. Created `a_pos = {p.position: p for p in a.plantations.values()}` and compare by position instead. This decouples the diff from the ID generation strategy.
+
+**Impact:** Eliminated spurious `plantation_set` divergences caused by ID namespace mismatch. Unit test added: `test_diff_ignores_id_namespace()` verifies that plantations at identical positions are correctly treated as equivalent despite differing IDs.
+
+### Finding 2: Missing connectivity recomputation (resolved)
+
+**Issue:** The dump does not persist `connected_ids` (the set of plantation IDs reachable from HQ via adjacency). When `load_state_at()` reconstructs an EngineState from CSV, it leaves `connected_ids = set()`. This causes all command validation to fail (`is_valid_command()` checks `if relay_id not in s.connected_ids: return False`), preventing all build/repair/sabotage actions from executing.
+
+**Concrete case:** Round 50, turn 11→12. Dump shows a construction at (126, 19) with progress=45 at turn 11, and a completed plantation at that position by turn 12. The engine's tick failed to execute the build command because the relay plantation at (127, 19) was not in `connected_ids`, leaving the construction stuck at progress=45 and preventing completion.
+
+**Root cause:** `db_loader.py` reconstructs state from per-turn snapshots in CSV files, but connectivity is a derived property (computed via BFS from HQ in rules.py phase 15). The dump does not record this derived state, so it must be recomputed at load time.
+
+**Fix (v0.1):** Added connectivity recomputation at the end of `load_state_at()`:
+```python
+from simulator.engine.spatial import bfs_connected
+own_positions = {pid: p.position for pid, p in s.plantations.items() if pid not in s.enemy_ids}
+s.connected_ids = bfs_connected(s.hq_id, own_positions)
+```
+
+**Impact:** Reduced plantation_set_by_pos divergences by allowing commands to execute correctly. Constructions now complete as intended, creating plantations that match the dump.
+
+### Combined impact
+
+Before fixes:
+- `plantation_set` divergence: ~3.45% (149 occurrences in 4317 turn boundaries across rounds 1–10)
+
+After fixes (applied sequentially):
+- ID namespace fix: Eliminated systematic ID mismatches in diff comparison
+- Connectivity fix: Allowed commands to execute, reducing position-based plantations divergences
+
+Residual plantation_set_by_pos divergences (rounds 10, 20, 30, 40 still show 20 per 50 turns) appear to be unrelated to these two issues and warrant further investigation (likely related to relay fallback or stochastic field timing).
+
 ## Next calibration steps (future work)
 
 1. Run extended replay on all 85 available rounds to increase sample size and surface any rare divergences.
 2. Add a "canonical" replay mode that excludes stochastic fields from diff scoring.
-3. Investigate the plantation_set divergence; add minimal-reproduction unit tests (`tests/engine/test_parity_<field>.py`) and fix the underlying engine behavior.
+3. Investigate residual plantation_set_by_pos divergences in later turns (not explained by ID namespace or connectivity issues).
 4. Add a parity gate to CI: on each PR, replay 10 rounds and fail if scoring-field divergence rate exceeds a budget (initial: loose, tightening over time).
 5. Consider extending the diff module to track weather and seismic events for completeness.

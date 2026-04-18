@@ -12,12 +12,18 @@ def load_stage_config(stage: int) -> dict:
         return yaml.safe_load(f)
 
 
-def make_env_for_stage(stage: int, seed: int) -> DatssolEnv:
-    cfg = load_stage_config(stage)
+def make_env_for_stage(stage, seed: int) -> DatssolEnv:
+    if isinstance(stage, int):
+        cfg = load_stage_config(stage)
+    else:
+        # Support named configs like "0_ez"
+        with (CONFIG_DIR / f"stage{stage}.yaml").open() as f:
+            cfg = yaml.safe_load(f)
     return DatssolEnv(
         seed=seed,
         map_size=tuple(cfg["map_size"]),
         round_turns=cfg["round_turns"],
+        game_config_overrides=cfg.get("game_config_overrides", {}),
     )
 
 

@@ -59,7 +59,7 @@ class EvalAndLogCallback(BaseCallback):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--stage", type=int, default=0)
+    ap.add_argument("--stage", type=str, default="0")
     ap.add_argument("--total-timesteps", type=int, default=5_000_000)
     ap.add_argument("--n-envs", type=int, default=8)
     ap.add_argument("--seed", type=int, default=0)
@@ -74,8 +74,13 @@ def main():
                     help="Resume from a saved model")
     args = ap.parse_args()
 
-    from simulator.train.curriculum import load_stage_config
-    stage_cfg = load_stage_config(args.stage)
+    from simulator.train.curriculum import load_stage_config, CONFIG_DIR
+    import yaml as _yaml
+    if args.stage.isdigit():
+        stage_cfg = load_stage_config(int(args.stage))
+    else:
+        with (CONFIG_DIR / f"stage{args.stage}.yaml").open() as f:
+            stage_cfg = _yaml.safe_load(f)
 
     def env_factory(i: int):
         def _make():
@@ -83,7 +88,8 @@ def main():
             return FlattenActionEnv(base)
         return _make
 
-    vec_cls = SubprocVecEnv if args.n_envs > 1 and os.name != "nt" else DummyVecEnv
+    # SubprocVecEnv works on Windows too (requires __name__ == "__main__" guard, which we have)
+    vec_cls = SubprocVecEnv if args.n_envs > 1 else DummyVecEnv
     vec = vec_cls([env_factory(i) for i in range(args.n_envs)])
 
     ckpt_dir = args.out.parent / f"{args.out.name}_ckpts"

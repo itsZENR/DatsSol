@@ -29,12 +29,14 @@ class DatssolEnv(gym.Env):
         map_size: tuple[int, int] = (278, 278),
         round_turns: int = 600,
         max_micro_per_turn: int = 45,
+        game_config_overrides: dict | None = None,
     ):
         super().__init__()
         self._seed = seed
         self._map_size = map_size
         self._round_turns = round_turns
         self._max_micro_per_turn = max_micro_per_turn
+        self._game_config_overrides = game_config_overrides or {}
 
         self.action_space = build_action_space()
         self.observation_space = spaces.Dict({
@@ -64,6 +66,7 @@ class DatssolEnv(gym.Env):
             map_width=self._map_size[0],
             map_height=self._map_size[1],
             round_turns=self._round_turns,
+            **self._game_config_overrides,
         )
         self.state = EngineState.new(cfg, seed=self._seed)
         # First tick spawns the HQ via _resolve_respawn

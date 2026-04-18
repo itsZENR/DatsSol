@@ -1,0 +1,9 @@
+map_size: [30, 30]
+round_turns: 100
+beavers_enabled: false
+meteo_enabled: false
+promote_reward_threshold: 100.0
+# Training-only relaxations (NOT real-game rules) — to help cold-start PPO discover building.
+game_config_overrides:
+  ds: 0          # No construction degradation — half-finished builds persist.
+  cs: 10         # Double construction speed — builds complete in 5 turns vs 10.

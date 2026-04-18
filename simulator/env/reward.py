@@ -11,8 +11,8 @@ SCORE_SCALE = 1000.0
 # Each +1 of construction progress gives a small bonus so ANY build attempt is reinforced.
 # Completed construction gives big bonus. Upgrades moderate. No penalties (they masked signal).
 B_BUILD_PROGRESS = 0.02   # per +1 progress; 50-progress ramp-up → +1.0
-B_BUILD = 3.0             # bonus on completion
-B_UPGRADE = 0.5
+B_BUILD = 10.0            # big bonus on completion — dominates idle reward (1.0)
+B_UPGRADE = 1.0
 B_HQ_LOSS = 0.0
 
 

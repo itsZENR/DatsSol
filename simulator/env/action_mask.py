@@ -40,17 +40,18 @@ def build_action_mask(state: EngineState, ctx: TurnContext) -> dict:
                 upgrade_mask[i] = 1
 
     # SET_RELOCATE — if HQ has orthogonally adjacent own connected neighbor
-    if not ctx.relocate_set and state.hq_id is not None:
-        hq = state.plantations[state.hq_id]
-        hq_pos = hq.position
-        pos_to_id = {p.position: pid for pid, p in state.plantations.items()}
-        has_neighbor = any(
-            (hq_pos[0] + dx, hq_pos[1] + dy) in pos_to_id and
-            pos_to_id[(hq_pos[0] + dx, hq_pos[1] + dy)] in state.connected_ids
-            for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]
-        )
-        if has_neighbor:
-            kind_mask[int(ActionKind.SET_RELOCATE)] = 1
+    if not ctx.relocate_set:
+        hq = state.get_hq()
+        if hq is not None:
+            hq_pos = hq.position
+            pos_to_id = {p.position: pid for pid, p in state.plantations.items()}
+            has_neighbor = any(
+                (hq_pos[0] + dx, hq_pos[1] + dy) in pos_to_id and
+                pos_to_id[(hq_pos[0] + dx, hq_pos[1] + dy)] in state.connected_ids
+                for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]
+            )
+            if has_neighbor:
+                kind_mask[int(ActionKind.SET_RELOCATE)] = 1
 
     # COMMAND — at least one unused author exists
     author_ids = ctx.ordered_author_ids(state)

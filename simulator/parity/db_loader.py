@@ -13,12 +13,53 @@ def load_round_ids(dump_dir: Path) -> list[int]:
     return rounds["id"].tolist()
 
 
-def load_state_at(dump_dir: Path, round_id: int, turn_no: int) -> EngineState:
+_round_cache: dict = {}
+
+
+def _load_round_cache(dump_dir: Path, round_id: int) -> dict:
+    """Load and cache ALL per-round data once, grouped by turn_id."""
+    key = (str(dump_dir.resolve()), round_id)
+    if key in _round_cache:
+        return _round_cache[key]
+
     turns = pd.read_csv(dump_dir / "turns.csv")
-    row = turns[(turns.round_id == round_id) & (turns.turn_no == turn_no)]
+    turns = turns[turns.round_id == round_id]
+    turn_ids = set(turns["id"])
+    if not turn_ids:
+        raise ValueError(f"No turns for round {round_id}")
+
+    def filter_by_turn(path):
+        df = pd.read_csv(path)
+        return df[df["turn_id"].isin(turn_ids)].copy()
+
+    cache = {
+        "turns": turns.set_index("id"),
+        "plantations": filter_by_turn(dump_dir / "plantations.csv"),
+        "cells": filter_by_turn(dump_dir / "cells.csv"),
+        "constructions": filter_by_turn(dump_dir / "constructions.csv"),
+        "beavers": filter_by_turn(dump_dir / "beavers.csv"),
+        "upgrades": filter_by_turn(dump_dir / "upgrades.csv"),
+        "upgrade_tiers": filter_by_turn(dump_dir / "upgrade_tiers.csv"),
+    }
+    # Mountains are round-scoped, not turn-scoped.
+    mnt = pd.read_csv(dump_dir / "mountains.csv")
+    cache["mountains"] = mnt[mnt.round_id == round_id].copy()
+
+    # Group each turn-scoped frame by turn_id for O(1) lookup.
+    for k in ("plantations", "cells", "constructions", "beavers", "upgrades", "upgrade_tiers"):
+        cache[k] = {tid: grp for tid, grp in cache[k].groupby("turn_id")}
+
+    _round_cache[key] = cache
+    return cache
+
+
+def load_state_at(dump_dir: Path, round_id: int, turn_no: int) -> EngineState:
+    cache = _load_round_cache(dump_dir, round_id)
+    turns = cache["turns"]
+    row = turns[turns["turn_no"] == turn_no]
     if row.empty:
         raise ValueError(f"No turn {turn_no} in round {round_id}")
-    turn_id = int(row.iloc[0]["id"])
+    turn_id = int(row.index[0])
     map_w = int(row.iloc[0]["map_width"])
     map_h = int(row.iloc[0]["map_height"])
 
@@ -26,66 +67,69 @@ def load_state_at(dump_dir: Path, round_id: int, turn_no: int) -> EngineState:
     s = EngineState.new(cfg, seed=0)
     s.turn_no = turn_no
 
-    plants = pd.read_csv(dump_dir / "plantations.csv")
-    for _, r in plants[plants.turn_id == turn_id].iterrows():
-        pid = str(r["plantation_id"])
-        s.plantations[pid] = Plantation(
-            id=pid, position=(int(r["x"]), int(r["y"])),
-            is_main=bool(r["is_main"]), hp=int(r["hp"]),
-            immunity_until_turn=int(r["immunity_until"]),
-            built_on_turn=0,
-        )
-        if bool(r["is_main"]):
-            s.hq_id = pid
+    plants = cache["plantations"].get(turn_id)
+    if plants is not None:
+        for _, r in plants.iterrows():
+            pid = str(r["plantation_id"])
+            s.plantations[pid] = Plantation(
+                id=pid, position=(int(r["x"]), int(r["y"])),
+                is_main=bool(r["is_main"]), hp=int(r["hp"]),
+                immunity_until_turn=int(r["immunity_until"]),
+                built_on_turn=0,
+            )
+            if bool(r["is_main"]):
+                s.hq_id = pid
 
-    cells = pd.read_csv(dump_dir / "cells.csv")
-    for _, r in cells[cells.turn_id == turn_id].iterrows():
-        pos = (int(r["x"]), int(r["y"]))
-        progress = int(r["progress"])
-        s.cells[pos] = CellState(
-            progress=progress,
-            completed_on_turn=(turn_no if progress >= 100 else None),
-        )
+    cells = cache["cells"].get(turn_id)
+    if cells is not None:
+        for _, r in cells.iterrows():
+            pos = (int(r["x"]), int(r["y"]))
+            progress = int(r["progress"])
+            s.cells[pos] = CellState(
+                progress=progress,
+                completed_on_turn=(turn_no if progress >= 100 else None),
+            )
 
-    cons = pd.read_csv(dump_dir / "constructions.csv")
-    for _, r in cons[cons.turn_id == turn_id].iterrows():
-        pos = (int(r["x"]), int(r["y"]))
-        s.constructions[pos] = Construction(
-            position=pos, progress=int(r["progress"]),
-            last_progress_turn=turn_no,
-            contributors_last_turn={},
-        )
+    cons = cache["constructions"].get(turn_id)
+    if cons is not None:
+        for _, r in cons.iterrows():
+            pos = (int(r["x"]), int(r["y"]))
+            s.constructions[pos] = Construction(
+                position=pos, progress=int(r["progress"]),
+                last_progress_turn=turn_no,
+                contributors_last_turn={},
+            )
 
-    beavers = pd.read_csv(dump_dir / "beavers.csv")
-    for _, r in beavers[beavers.turn_id == turn_id].iterrows():
-        bid = str(r["beaver_id"])
-        s.beavers[bid] = Beaver(
-            id=bid, position=(int(r["x"]), int(r["y"])),
-            hp=int(r["hp"]), last_hit_by={}, total_damage_this_turn={},
-        )
+    beavers = cache["beavers"].get(turn_id)
+    if beavers is not None:
+        for _, r in beavers.iterrows():
+            bid = str(r["beaver_id"])
+            s.beavers[bid] = Beaver(
+                id=bid, position=(int(r["x"]), int(r["y"])),
+                hp=int(r["hp"]), last_hit_by={}, total_damage_this_turn={},
+            )
 
-    mnt = pd.read_csv(dump_dir / "mountains.csv")
-    round_id_val = int(row.iloc[0]["round_id"])
-    mnt_round = mnt[mnt.round_id == round_id_val]
+    mnt = cache["mountains"]
     s.mountains = frozenset(
-        (int(r["x"]), int(r["y"])) for _, r in mnt_round.iterrows()
+        (int(r["x"]), int(r["y"])) for _, r in mnt.iterrows()
     )
 
-    up = pd.read_csv(dump_dir / "upgrades.csv")
-    up_row = up[up.turn_id == turn_id]
-    if not up_row.empty:
-        s.upgrades.points = int(up_row.iloc[0]["points"])
-        s.upgrades.turns_until_points = int(up_row.iloc[0]["turns_until"])
+    up = cache["upgrades"].get(turn_id)
+    if up is not None and not up.empty:
+        r = up.iloc[0]
+        s.upgrades.points = int(r["points"])
+        s.upgrades.turns_until_points = int(r["turns_until"])
 
-    tiers = pd.read_csv(dump_dir / "upgrade_tiers.csv")
-    for _, r in tiers[tiers.turn_id == turn_id].iterrows():
-        try:
-            name = UpgradeName(str(r["name"]))
-        except ValueError:
-            continue
-        s.upgrades.tiers[name] = UpgradeTier(
-            current=int(r["current"]),
-            max=int(r["max_level"]) if r["max_level"] != -1 else 99,
-        )
+    tiers = cache["upgrade_tiers"].get(turn_id)
+    if tiers is not None:
+        for _, r in tiers.iterrows():
+            try:
+                name = UpgradeName(str(r["name"]))
+            except ValueError:
+                continue
+            s.upgrades.tiers[name] = UpgradeTier(
+                current=int(r["current"]),
+                max=int(r["max_level"]) if r["max_level"] != -1 else 99,
+            )
 
     return s

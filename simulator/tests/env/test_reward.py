@@ -31,5 +31,6 @@ def test_hq_loss_penalty():
     s = EngineState.new(cfg, seed=0)
     events = [HQLost(prev_hq_id="hq", penalty=50)]
     r = compute_reward(1000, 950, events, state_after=s)
-    # score_delta = -50 / 1000 = -0.05
-    assert abs(r - (-0.05)) < 1e-6
+    # score_delta = -50 / 1000 = -0.05; plus shaped HQLost penalty (B_HQ_LOSS = 1.0)
+    from simulator.env.reward import B_HQ_LOSS
+    assert abs(r - (-0.05 - B_HQ_LOSS)) < 1e-6

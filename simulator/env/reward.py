@@ -6,13 +6,12 @@ from simulator.engine.events import (
 
 SCORE_SCALE = 1000.0
 
-# Shaping bonuses (in reward units, added to Δscore/SCORE_SCALE):
-#   - Each completed construction gives a dense +B_BUILD (compared to final cell reward 1000/SCORE_SCALE = 1.0).
-#   - Each upgrade purchased gives +B_UPGRADE.
-#   - HQ loss adds an explicit penalty beyond the score delta (to discourage suicide-builds).
-B_BUILD = 0.5
-B_UPGRADE = 0.2
-B_HQ_LOSS = 1.0
+# Shaping bonuses (in reward units).
+# Goal: strongly reinforce building & upgrades to escape the idle-converges-to-local-optimum
+# trap. Penalties removed — they dominated early exploration and discouraged any building.
+B_BUILD = 2.0           # Big bonus for each completed construction (vs cell reward = 1.0)
+B_UPGRADE = 0.5
+B_HQ_LOSS = 0.0         # Score delta already penalizes HQ loss (5% of current score)
 
 
 def compute_reward(
@@ -23,17 +22,7 @@ def compute_reward(
 ) -> float:
     delta = (cur_score - prev_score) / SCORE_SCALE
 
-    # Penalty for losing own plantations (lost cell potential)
-    penalty = 0.0
-    if state_after is not None:
-        for e in events:
-            if isinstance(e, PlantationDestroyed) and not e.was_main:
-                cell = state_after.cells.get(e.position)
-                progress = cell.progress if cell is not None else 0
-                potential = state_after.cell_reward(e.position) * (100 - progress) / 100.0
-                penalty += potential / SCORE_SCALE
-
-    # Shaped bonuses: dense signal so PPO can credit early discoveries.
+    # Shaped bonuses for positive events.
     shaping = 0.0
     for e in events:
         if isinstance(e, ConstructionCompleted):
@@ -43,4 +32,4 @@ def compute_reward(
         elif isinstance(e, HQLost):
             shaping -= B_HQ_LOSS
 
-    return delta - penalty + shaping
+    return delta + shaping

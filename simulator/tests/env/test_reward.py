@@ -13,7 +13,8 @@ def test_score_delta_to_reward():
     assert abs(r - 0.15) < 1e-6
 
 
-def test_penalty_for_lost_plantation():
+def test_plantation_loss_no_longer_penalized():
+    # Per shaping redesign: lost plantations no longer add penalty to reward.
     cfg = GameConfig()
     s = EngineState.new(cfg, seed=0)
     s.cells[(5, 6)] = CellState(progress=40, completed_on_turn=None)
@@ -21,16 +22,20 @@ def test_penalty_for_lost_plantation():
         PlantationDestroyed(plantation_id="p1", position=(5, 6), was_main=False),
     ]
     r = compute_reward(0, 0, events, state_after=s)
-    # Lost plantation with 40% progress → potential = 1000 * 60/100 = 600
-    # reward = 0 - 600/1000 = -0.6
-    assert abs(r - (-0.6)) < 1e-6
+    assert abs(r - 0.0) < 1e-6
 
 
-def test_hq_loss_penalty():
+def test_hq_loss_reward_is_pure_score_delta():
     cfg = GameConfig()
     s = EngineState.new(cfg, seed=0)
     events = [HQLost(prev_hq_id="hq", penalty=50)]
     r = compute_reward(1000, 950, events, state_after=s)
-    # score_delta = -50 / 1000 = -0.05; plus shaped HQLost penalty (B_HQ_LOSS = 1.0)
-    from simulator.env.reward import B_HQ_LOSS
-    assert abs(r - (-0.05 - B_HQ_LOSS)) < 1e-6
+    # Only the −50 score delta applies.
+    assert abs(r - (-0.05)) < 1e-6
+
+
+def test_construction_completed_adds_build_bonus():
+    from simulator.env.reward import B_BUILD
+    from simulator.engine.events import ConstructionCompleted
+    r = compute_reward(0, 0, [ConstructionCompleted(position=(1, 2), new_plantation_id="p1")], None)
+    assert abs(r - B_BUILD) < 1e-6

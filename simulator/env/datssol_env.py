@@ -97,7 +97,8 @@ class DatssolEnv(gym.Env):
                 mtn.add((x, y))
             self.state.mountains = frozenset(mtn)
 
-        # Beavers: placed at random non-mountain cells, not too close to HQ (1,1)
+        # Beavers: placed close to HQ (6-10 cells) so attacks are discoverable
+        # via simple expansion (not requiring 10+ turn build chains).
         if cfg.initial_beavers > 0:
             placed = 0
             attempts = 0
@@ -107,7 +108,9 @@ class DatssolEnv(gym.Env):
                 y = int(rng.integers(0, h))
                 if (x, y) in self.state.mountains:
                     continue
-                if abs(x - 1) + abs(y - 1) < 8:  # not adjacent to HQ
+                d = abs(x - 1) + abs(y - 1)
+                # Spawn ring 6-10: close enough that 2-3 builds reach attack range
+                if d < 6 or d > 10:
                     continue
                 bid = f"b{placed}"
                 self.state.beavers[bid] = Beaver(

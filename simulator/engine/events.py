@@ -53,8 +53,14 @@ class ConstructionProgressed:
     amount: int
 
 
+@dataclass(frozen=True)
+class BeaverDamaged:
+    beaver_id: BeaverID
+    amount: int
+
+
 Event = Union[
     Scored, PlantationDestroyed, BeaverKilled, HQLost,
     ConstructionCompleted, CellTerraformed, UpgradeBought,
-    ConstructionProgressed,
+    ConstructionProgressed, BeaverDamaged,
 ]

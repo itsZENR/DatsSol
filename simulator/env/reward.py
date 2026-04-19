@@ -1,16 +1,19 @@
-"""Δscore + shaping. Added BEAVER_KILL bonus to push policy past Go-plateau."""
+"""Δscore + shaping. Added per-turn plantation-count bonus to push expansion."""
 from typing import Optional
 from simulator.engine.state import EngineState
 from simulator.engine.events import (
-    Event, ConstructionCompleted, ConstructionProgressed, BeaverKilled,
+    Event, ConstructionCompleted, ConstructionProgressed,
+    BeaverKilled, BeaverDamaged,
 )
 
 SCORE_SCALE = 1000.0
 
 B_BUILD = 0.5
 B_BUILD_PROGRESS = 0.005
-B_BEAVER_KILL = 30.0     # Big signal. Score delta already gives +20 per kill (20K points);
-                         # this bonus pushes policy to prioritize attacks over safe terraform.
+B_BEAVER_KILL = 30.0
+B_BEAVER_DAMAGE = 0.3
+# Per-plantation-per-tick bonus — pushes expansion up to limit.
+B_PLANT_ALIVE = 0.01
 
 
 def compute_reward(
@@ -28,4 +31,13 @@ def compute_reward(
             shaping += B_BUILD_PROGRESS * e.amount
         elif isinstance(e, BeaverKilled):
             shaping += B_BEAVER_KILL
+        elif isinstance(e, BeaverDamaged):
+            shaping += B_BEAVER_DAMAGE * e.amount
+    # Per-plantation bonus applied each reward tick
+    if state_after is not None:
+        n_own = sum(
+            1 for pid in state_after.plantations
+            if pid not in state_after.enemy_ids
+        )
+        shaping += B_PLANT_ALIVE * n_own
     return delta + shaping

@@ -38,6 +38,7 @@ class EvalBC(BaseCallback):
             map_size=tuple(self.stage_cfg["map_size"]),
             round_turns=self.stage_cfg["round_turns"],
             game_config_overrides=self.stage_cfg.get("game_config_overrides", {}),
+            vision_aware=True,
         )
         env = FlattenActionEnv(base)
         scores = []

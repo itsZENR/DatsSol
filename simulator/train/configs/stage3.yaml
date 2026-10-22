@@ -1,6 +1,5 @@
 map_size: [278, 278]
 round_turns: 600
-beavers_enabled: true
-meteo_enabled: true
-beaver_density: 1.0
-use_dump_initial_states: true
+game_config_overrides:
+  initial_beavers: 60
+  initial_mountain_density: 0.02

@@ -25,7 +25,8 @@ def main():
     else:
         base = DatssolEnv(
             seed=args.seed, map_size=tuple(args.map_size),
-            round_turns=args.round_turns
+            round_turns=args.round_turns,
+            vision_aware=True,
         )
     env = FlattenActionEnv(base)
     try:

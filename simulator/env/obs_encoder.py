@@ -14,14 +14,36 @@ GRID_CHANNELS = 10
 GRID_SIZE = 31  # ±15 around HQ
 
 
-def encode_observation(state: EngineState, used_authors: set | None = None) -> dict:
+def _visible_positions(state: EngineState) -> set:
+    """Chebyshev ≤ vr cells around every own plantation — matches server fog."""
+    vr = state.effective_vr()
+    out = set()
+    for pid, p in state.plantations.items():
+        if pid in state.enemy_ids:
+            continue
+        x, y = p.position
+        for dx in range(-vr, vr + 1):
+            for dy in range(-vr, vr + 1):
+                out.add((x + dx, y + dy))
+    return out
+
+
+def encode_observation(
+    state: EngineState,
+    used_authors: set | None = None,
+    vision_aware: bool = False,
+) -> dict:
     """Encode state into obs dict.
 
     `used_authors` — ids of plantations already used as author in the current turn
     (from FlattenActionEnv's turn context). Policy can see which are free vs used.
+
+    `vision_aware` — if True, hide entities/terrain outside Chebyshev vr of any
+    own plantation. Matches what /api/arena gives to the live bot.
     """
     if used_authors is None:
         used_authors = set()
+    visible = _visible_positions(state) if vision_aware else None
     hq = state.get_hq()
     hq_pos = hq.position if hq else (0, 0)
     mhp = state.effective_mhp()
@@ -42,6 +64,14 @@ def encode_observation(state: EngineState, used_authors: set | None = None) -> d
         p = state.plantations[pid]
         dx = (p.position[0] - hq_pos[0]) / 50.0
         dy = (p.position[1] - hq_pos[1]) / 50.0
+        # server never provides builtOnTurn → zero the age-dependent features
+        # when vision_aware so training matches live inputs exactly.
+        if vision_aware:
+            age_feat = 0.0
+            oldest_feat = 0.0
+        else:
+            age_feat = (state.turn_no - p.built_on_turn) / 100.0
+            oldest_feat = float(p.built_on_turn == oldest_turn)
         self_arr[i] = [
             dx, dy,
             p.hp / max(1, mhp),
@@ -51,8 +81,8 @@ def encode_observation(state: EngineState, used_authors: set | None = None) -> d
             float(state.is_boosted_cell(p.position)),
             (state.cells[p.position].progress / 100.0
              if p.position in state.cells else 0.0),
-            (state.turn_no - p.built_on_turn) / 100.0,
-            float(p.built_on_turn == oldest_turn),
+            age_feat,
+            oldest_feat,
             0.0,  # n_connected_neighbors placeholder
             0.0,  # in_storm placeholder
             0.0 if pid in used_authors else 1.0,  # available_this_turn
@@ -62,20 +92,32 @@ def encode_observation(state: EngineState, used_authors: set | None = None) -> d
     enemy_arr = np.zeros((MAX_ENEMY, F_ENEMY), dtype=np.float32)
     enemy_mask = np.zeros(MAX_ENEMY, dtype=bool)
     enemy_ids = sorted(state.enemy_ids)
-    for i, eid in enumerate(enemy_ids[:MAX_ENEMY]):
+    i = 0
+    for eid in enemy_ids:
+        if i >= MAX_ENEMY:
+            break
         e = state.plantations[eid]
+        if visible is not None and e.position not in visible:
+            continue
         dx = (e.position[0] - hq_pos[0]) / 50.0
         dy = (e.position[1] - hq_pos[1]) / 50.0
         enemy_arr[i] = [dx, dy, e.hp / 50.0, 0.0]
         enemy_mask[i] = True
+        i += 1
 
     beaver_arr = np.zeros((MAX_BEAVER, F_BEAVER), dtype=np.float32)
     beaver_mask = np.zeros(MAX_BEAVER, dtype=bool)
-    for i, (bid, b) in enumerate(sorted(state.beavers.items())[:MAX_BEAVER]):
+    i = 0
+    for bid, b in sorted(state.beavers.items()):
+        if i >= MAX_BEAVER:
+            break
+        if visible is not None and b.position not in visible:
+            continue
         dx = (b.position[0] - hq_pos[0]) / 50.0
         dy = (b.position[1] - hq_pos[1]) / 50.0
         beaver_arr[i] = [dx, dy, b.hp / 100.0, 0.0]
         beaver_mask[i] = True
+        i += 1
 
     storm_arr = np.zeros((MAX_STORM, F_STORM), dtype=np.float32)
     storm_mask = np.zeros(MAX_STORM, dtype=bool)
@@ -104,7 +146,8 @@ def encode_observation(state: EngineState, used_authors: set | None = None) -> d
     global_arr[11] = len([
         pid for pid in state.plantations if pid not in state.enemy_ids
     ]) / MAX_PLANT
-    global_arr[12] = state.score / 1e5
+    # /api/arena doesn't return score — hide it from vision_aware training too.
+    global_arr[12] = 0.0 if vision_aware else (state.score / 1e5)
 
     grid = np.zeros((GRID_CHANNELS, GRID_SIZE, GRID_SIZE), dtype=np.float32)
     half = GRID_SIZE // 2
@@ -120,17 +163,18 @@ def encode_observation(state: EngineState, used_authors: set | None = None) -> d
             gy = dy + half
             if not (0 <= x < w and 0 <= y < h):
                 continue
-            if (x, y) in state.mountains:
+            seen = visible is None or (x, y) in visible
+            if seen and (x, y) in state.mountains:
                 grid[0, gx, gy] = 1.0
             if (x, y) in own_positions:
                 grid[1, gx, gy] = 1.0
-            if (x, y) in state.constructions:
+            if seen and (x, y) in state.constructions:
                 grid[2, gx, gy] = state.constructions[(x, y)].progress / 50.0
-            if (x, y) in enemy_positions:
+            if seen and (x, y) in enemy_positions:
                 grid[3, gx, gy] = 1.0
-            if (x, y) in beaver_positions:
+            if seen and (x, y) in beaver_positions:
                 grid[4, gx, gy] = 1.0
-            if (x, y) in state.cells:
+            if seen and (x, y) in state.cells:
                 grid[5, gx, gy] = state.cells[(x, y)].progress / 100.0
             if state.is_boosted_cell((x, y)):
                 grid[6, gx, gy] = 1.0

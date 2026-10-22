@@ -30,6 +30,7 @@ class DatssolEnv(gym.Env):
         round_turns: int = 600,
         max_micro_per_turn: int = 45,
         game_config_overrides: dict | None = None,
+        vision_aware: bool = False,
     ):
         super().__init__()
         self._seed = seed
@@ -37,6 +38,7 @@ class DatssolEnv(gym.Env):
         self._round_turns = round_turns
         self._max_micro_per_turn = max_micro_per_turn
         self._game_config_overrides = game_config_overrides or {}
+        self._vision_aware = vision_aware
 
         self.action_space = build_action_space()
         self.observation_space = spaces.Dict({
@@ -73,7 +75,8 @@ class DatssolEnv(gym.Env):
         # First tick spawns the HQ via _resolve_respawn
         self.state = tick(self.state, CommandSet())
         self._reset_turn_context()
-        obs = encode_observation(self.state, self._ctx.authors_used)
+        obs = encode_observation(self.state, self._ctx.authors_used,
+                                 vision_aware=self._vision_aware)
         info = {"action_mask": build_action_mask(self.state, self._ctx)}
         return obs, info
 
@@ -97,20 +100,21 @@ class DatssolEnv(gym.Env):
                 mtn.add((x, y))
             self.state.mountains = frozenset(mtn)
 
-        # Beavers: placed close to HQ (6-10 cells) so attacks are discoverable
-        # via simple expansion (not requiring 10+ turn build chains).
+        # Beavers: uniform random across the map (matches real server). Keep
+        # HQ spawn area clear (5-cell radius around (1,1)).
         if cfg.initial_beavers > 0:
             placed = 0
             attempts = 0
-            while placed < cfg.initial_beavers and attempts < 1000:
+            while placed < cfg.initial_beavers and attempts < cfg.initial_beavers * 50:
                 attempts += 1
                 x = int(rng.integers(0, w))
                 y = int(rng.integers(0, h))
                 if (x, y) in self.state.mountains:
                     continue
-                d = abs(x - 1) + abs(y - 1)
-                # Spawn ring 6-10: close enough that 2-3 builds reach attack range
-                if d < 6 or d > 10:
+                if abs(x - 1) + abs(y - 1) < 5:
+                    continue
+                # Avoid duplicate positions
+                if any(b.position == (x, y) for b in self.state.beavers.values()):
                     continue
                 bid = f"b{placed}"
                 self.state.beavers[bid] = Beaver(
@@ -194,6 +198,7 @@ class DatssolEnv(gym.Env):
             self.state.hq_id is None and self.state.score < 0
         )
         truncated = False
-        obs = encode_observation(self.state, self._ctx.authors_used)
+        obs = encode_observation(self.state, self._ctx.authors_used,
+                                 vision_aware=self._vision_aware)
         info = {"action_mask": build_action_mask(self.state, self._ctx)}
         return obs, float(reward), terminated, truncated, info

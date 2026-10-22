@@ -24,6 +24,7 @@ def make_env_for_stage(stage, seed: int) -> DatssolEnv:
         map_size=tuple(cfg["map_size"]),
         round_turns=cfg["round_turns"],
         game_config_overrides=cfg.get("game_config_overrides", {}),
+        vision_aware=True,
     )
 
 
